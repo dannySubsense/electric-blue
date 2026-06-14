@@ -61,6 +61,12 @@ Rules:
 - each slice ends **gate-green** before the next begins; **no partial slices**.
 - `PROGRESS.md` (in the spec dir) tracks slice state + fix attempts. **3+ repeats of the same fix =
   HALT to human.** The revert target on HALT is the **last gate-green slice commit**.
+- **Shell-less authoring agents do not self-verify tooling.** `@test-writer` (and any agent without a
+  shell) cannot run `black`/`ruff`/`pytest`; its "self-check" is a static trace. The orchestrator or
+  `@test-runner` runs the tooling after authoring. The **gate's `black --check` is the trustworthy
+  line**; pre-commit hooks (`make dev`) are convenience, not the enforcement point.
+- **Run the gate through the editable venv** (`PATH="$PWD/.venv/bin:$PATH" make gate`); the INV-14 guard
+  test fails loud if the install isn't this checkout's `src/`.
 - **Gate (per slice boundary):** `make gate` green.
 
 ## P4 — Cross-DDR build order *(governs which sprint runs)*

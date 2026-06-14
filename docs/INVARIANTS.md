@@ -35,6 +35,7 @@ suggestion. This doubles the wall as a compliance ledger — when a TARGET flips
 | INV-11 Dispatch only via Protocol + registry | **TARGET** | current dispatch is `if/else` — backend-seam S2–S3 |
 | INV-12 Authorship ≠ judgment | **MET** | active separation |
 | INV-13 Reproducible builds (ML stack pinned) | **PARTIAL** | model-ids pinned; `faster-whisper>=1.0`/torch unpinned = gap |
+| INV-14 Gate runs against working-tree `src/` | **MET** | `tests/test_install_editable.py` (gate-marked) — fails on stale/non-editable install |
 
 ---
 
@@ -149,6 +150,20 @@ real model.
   test runs).
 - **Check:** `make gate` passes with network disabled and no `WHISPER_*` keys in env; the only tests
   importing `faster_whisper` or making a real `requests.post` are `smoke`-marked.
+
+### INV-14 — The gate runs against working-tree `src/`, never a stale install copy
+**Status: MET — enforced by `tests/test_install_editable.py` (gate-marked).**
+The package under test resolves to **this checkout's `src/`**, so gate-attested invariants
+(INV-3 / INV-4 / INV-8) prove the code under review — not a drifted, non-editable, or stale install copy.
+
+- **Why:** a non-editable venv imports `electric_blue` from a `site-packages` *copy*; the gate then
+  goes green against code that is **not** the working tree. Every behavior-preservation proof (INV-3)
+  built on that green is hollow — confidently wrong, no signal. (This nearly invalidated the
+  backend-seam S3 proof until it was caught.) `make dev` installs editable; the guard makes it
+  enforced, not honor-system.
+- **Check:** a gate-marked test asserts `Path(electric_blue.__file__).resolve()` is relative to
+  `<repo>/src/` (repo root derived from the test file's own location). `make gate` — locally and in CI —
+  fails on any non-editable/stale install.
 
 ### INV-12 — Authorship and judgment are separated
 The role that **judges** (Frank) and the role that **runs gates/git** (the orchestrator) do not

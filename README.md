@@ -32,6 +32,18 @@ pip install -e ".[local]" # + faster-whisper for local backend
 - macOS: `brew install ffmpeg`
 - Windows: `winget install Gyan.FFmpeg`
 
+### Development setup
+
+```bash
+make dev   # editable install (.[local,dev]) + activate black/ruff pre-commit hooks
+make gate  # black --check + ruff + pytest (non-smoke); the merge gate
+make smoke # real tiny-model end-to-end (needs ffmpeg + faster-whisper)
+```
+
+`make dev` installs the package **editable** so the test suite runs against this checkout's
+`src/`. A gate test (`tests/test_install_editable.py`) enforces this — a non-editable/stale
+install fails `make gate` rather than silently verifying a copy (see `docs/INVARIANTS.md` INV-14).
+
 ---
 
 ## Quickstart
