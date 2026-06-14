@@ -7,15 +7,22 @@ Spec committed @ `d33f717`. Governance: `docs/INVARIANTS.md` + `docs/CADENCE.md`
 
 ## Slices
 - [x] S1 — Characterization Tests (pre-refactor): 22 char tests (20 API + 2 local) green vs CURRENT code — COMPLETE (2026-06-14)
-- [ ] S2 — base.py: Backend Protocol + Capabilities + Transcript — IN_PROGRESS (next)
-- [ ] S3 — Registry + get_backend() + refactor local/api (21 char tests still green; +registry test) — PENDING
+- [x] S2 — base.py: Backend Protocol + Capabilities + Transcript — COMPLETE (2026-06-14)
+- [ ] S3 — Registry + get_backend() + refactor local/api (21 char tests still green; +registry test) — IN_PROGRESS (next)
 - [ ] S4 — schema_version: 1 in outputs.py + test — PENDING
 - [ ] S5 — full gate + smoke + Frank build gate — PENDING
 
 ## Current
-Slice: S2
-Step: @code-executor (create backends/base.py)
+Slice: S3
+Step: @code-executor (registry + get_backend + refactor local/api) ; @test-writer (registry error test)
 Branch: sprint/backend-seam
+
+## ENV NOTE (load-bearing for S3+)
+The local `.venv` was a NON-editable install (imported electric_blue from a site-packages COPY, not
+src/). Reinstalled editable: `PATH="$PWD/.venv/bin:$PATH" pip install -e ".[dev]"`. Now src/ is the live
+package. CRITICAL for S3: the refactor edits src/; tests MUST run against src/ or the behavior-
+preservation proof is hollow. Always run gate via `PATH="$PWD/.venv/bin:$PATH" make gate`. S1 was
+unaffected (it changed no src/, so copy == src for the pinned behavior).
 
 ## S1 result (baseline established)
 22/22 char tests green; `make gate` 46 passed; QC PASS (non-tautological, hermetic, public seam,
