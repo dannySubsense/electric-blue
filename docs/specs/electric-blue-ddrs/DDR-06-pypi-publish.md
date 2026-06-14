@@ -236,6 +236,10 @@ This sprint cannot start until DDR-05 is merged and the output schema is stable.
   Proposed fallbacks in priority order: `electric-blue-transcribe`, `electric-blue-ts`.
   The distribution name is only the `pip install` handle; it does not appear in user code.
   **DECISION: confirm name or choose fallback.**
+  - **✅ FINDING (externals pass, 2026-06-14) — RESOLVED: AVAILABLE.** `electric-blue` is unclaimed
+    on PyPI. `https://pypi.org/pypi/electric-blue/json` → HTTP 404, and the normalized `electric_blue`
+    form → 404 (PEP 503 makes `-`/`_`/case equivalent, so dual-404 is conclusive). Proceed with
+    `name = "electric-blue"`; no fallback or rename. Source: PyPI JSON API (canonical). High confidence.
 
 - **D2 — Trusted Publishing (OIDC) vs API token in GitHub Secrets.** OIDC is the modern
   best practice (no long-lived secret, no rotation burden, scoped to this workflow). API
