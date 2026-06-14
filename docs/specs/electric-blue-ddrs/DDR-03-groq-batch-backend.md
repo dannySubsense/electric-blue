@@ -564,6 +564,19 @@ to coexist in the same process without conflating two orthogonal concerns.
   documentation must be checked before sprint start. If audio transcription is
   unsupported, evaluate whether a Groq async audio job API (if one exists) provides
   equivalent economics.
+  - **✅ FINDING (externals pass, 2026-06-14) — CONFIRMED, with a load-bearing constraint.**
+    Groq's Batch API (`/v1/batches`, JSONL submit→poll→retrieve) **does** accept
+    `/v1/audio/transcriptions` (`whisper-large-v3` / `-turbo`), at **50% off** sync, completion
+    window **24h–7d**, JSONL cap 50,000 lines / 200 MB.
+    **BUT — audio must be referenced by PUBLIC URL only; the `file` upload/file-id field is NOT
+    supported in batch.** Each JSONL line carries `"url": "https://…"` in the request body. So a
+    local drop-folder file **cannot** be submitted directly — DDR-03's `AsyncBackend` must add a
+    **"stage local audio → reachable URL"** step before submission. **New design question for the
+    sprint:** stage to a local temp HTTP server (simple, homelab-only) vs object storage /
+    pre-signed URL (portable). This is a real lifecycle step, not just a poll-wrapper around sync
+    calls. D6 = green to build, but the staging decision is now the central design question.
+    Source: `console.groq.com/docs/batch` + `/docs/speech-to-text` (primary, with example body).
+    High confidence.
 
 - **D7 — VERIFY: Groq Batch API endpoints and request/response schemas.** Specifically:
   file upload endpoint URL and `purpose` field value; whether the audio file in the

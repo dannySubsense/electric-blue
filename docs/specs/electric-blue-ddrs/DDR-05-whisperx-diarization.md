@@ -170,6 +170,31 @@ sometimes aggressive. The `[local]` extra (`faster-whisper`) also pulls torch on
 systems. These two may conflict. (FLAG D7 — this is the biggest dependency risk; see also
 the alternative approach in D1 that avoids whisperx entirely.)
 
+> **✅ FINDING (externals pass, 2026-06-14) — VIABLE but RISKY; three hard constraints.**
+> Researched whisperx **3.8.6** (`pyproject.toml` on `main`): `requires-python >=3.10,<3.14`
+> (matches our CI), `torch~=2.8.0` (tight), `torchaudio~=2.8.0`, `faster-whisper>=1.2.0`,
+> `pyannote-audio>=4.0.0`, `numpy>=2.1.0`, `triton>=3.3.0` (**Linux x86_64 only**).
+> - **Co-install `[local,diarize]` RESOLVES.** `[local]` is `faster-whisper>=1.0`; whisperx tightens
+>   to `>=1.2.0` (compatible). `faster-whisper` uses **ctranslate2, not torch** — so whisperx's
+>   `torch~=2.8.0` is the sole torch pin, no cross-extra conflict.
+> - **Constraint 1 — pyannote models are GATED.** `pyannote/speaker-diarization-3.1` + its
+>   `segmentation-3.0` dep require an **HF token AND manual per-account license click-through** (not
+>   pip-automatable). Deployment/CI needs `HF_TOKEN` injected. (A newer CC-BY `community-1` model
+>   exists but whisperx's default pipeline still calls the gated 3.1 unless overridden.) This
+>   matches the DDR's own `hf_token`/`ConfigurationError` design — keep it.
+> - **Constraint 2 — GPU-required.** Diarization (pyannote) is impractically slow on CPU → the
+>   **CPU-only R630 cannot host it; only the ASUS ROG / 4090 can.** Diarization is a
+>   **host-conditional** feature, not a universal pipeline step. Reflect in deployment docs.
+> - **Constraint 3 — `torch~=2.8.0` tight pin.** A torch 2.9 release breaks `[diarize]` until
+>   whisperx updates (maintainers have yanked versions over torch mismatches). Track whisperx releases.
+> - **Recommended `[diarize]`:** just `whisperx>=3.8.6,<4.0` (it pulls torch/pyannote transitively —
+>   do NOT re-declare them; replaces the proposed `whisperx>=3.1`/`pyannote.audio>=3.1`/`torch>=2.0`).
+> - **INV-13 (reproducibility):** bump `[local]` to `faster-whisper>=1.2.0,<2.0`; leave torch
+>   transitive (faster-whisper doesn't use it); if gate/smoke need a pinned torch, put it in dev deps.
+> Sources: whisperx PyPI 3.8.6 + GitHub `pyproject.toml`; faster-whisper 1.2.1; pyannote 3.1 HF model
+> card; whisperX issues #973/#1241/#1051/#542. Dependency facts HIGH confidence; py3.12+torch2.8 edge
+> cases MEDIUM.
+
 ### 5. Configuration
 
 New fields added to `Config` (all read in `Config.from_env()`):
