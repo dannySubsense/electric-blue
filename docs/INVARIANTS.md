@@ -34,7 +34,7 @@ suggestion. This doubles the wall as a compliance ledger — when a TARGET flips
 | INV-10 `schema_version` data-independent/additive | **TARGET** | not emitted yet — backend-seam S4 |
 | INV-11 Dispatch only via Protocol + registry | **TARGET** | current dispatch is `if/else` — backend-seam S2–S3 |
 | INV-12 Authorship ≠ judgment | **MET** | active separation |
-| INV-13 Reproducible builds (ML stack pinned) | **PARTIAL** | model-ids pinned; `faster-whisper>=1.0`/torch unpinned = gap |
+| INV-13 Reproducible builds (ML stack pinned) | **MET** | model-ids + `faster-whisper>=1.2.0,<2.0` bounded; torch only via future `[diarize]` (whisperx-pinned) |
 | INV-14 Gate runs against working-tree `src/` | **MET** | `tests/test_install_editable.py` (gate-marked) — fails on stale/non-editable install |
 
 ---
@@ -99,18 +99,18 @@ command output; auth tokens are masked in any printed command.
   secret; `.gitignore` contains `CLAUDE.md` and `docs/homelab/`; the push command masks the token.
 
 ### INV-13 — Reproducible builds: ML stack and model identifiers pinned
-**Status: PARTIALLY MET — model-id defaults MET; dependency pinning NOT MET (standing gap to close).**
+**Status: MET.**
 The torch / faster-whisper stack and the Whisper model identifiers are pinned/declared so `gate`
 and `smoke` are reproducible run-to-run.
 
 - **Why:** a floating model version is a silent-output-change waiting to happen — INV-2 wearing a
   dependency hat.
-- **Current state:** the model-id half is MET — `model_size` (`"distil-large-v3"`) and `api_model`
-  (`"whisper-large-v3-turbo"`) defaults are explicit constants in `config.py`. The dependency-pinning
-  half is **NOT MET**: `pyproject.toml` declares `faster-whisper>=1.0` (a floating lower bound) and
-  torch is only transitive (not a declared dep). This invariant **flags that as a gap to close** —
-  tighten the `[local]` extra to a bounded range (e.g. `faster-whisper>=1.0,<2` and a pinned torch)
-  in its own change, not silently.
+- **Current state:** model-id defaults are explicit constants in `config.py` (`model_size`
+  `"distil-large-v3"`, `api_model` `"whisper-large-v3-turbo"`). The `[local]` ML dep is bounded:
+  `faster-whisper>=1.2.0,<2.0` (lower bound aligned with the whisperx floor; upper guards a 2.x
+  break — empirically dry-run-resolved). torch is **not** a direct dep here — `faster-whisper` uses
+  ctranslate2, not torch — so there is nothing to pin in `[local]`. torch enters only via the future
+  `[diarize]` extra, where whisperx owns the `torch~=2.8.0` pin (DDR-05).
 - **Check:** `[project.optional-dependencies].local` bounds the ML stack (no bare floating `>=`);
   `model_size` / `api_model` defaults are explicit constants in `config.py`.
 

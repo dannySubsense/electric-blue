@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-local = ["faster-whisper>=1.0"]
+local = ["faster-whisper>=1.2.0,<2.0"]  # bounded: aligns with whisperx floor; guards a 2.x break (INV-13)
 dev = [
     "pytest>=8",
     "black>=24",
