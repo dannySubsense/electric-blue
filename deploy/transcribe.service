@@ -1,0 +1,31 @@
+# Example systemd unit template — copy to /etc/systemd/system/ and edit placeholders.
+# Placeholders: <INSTALL_DIR> (e.g. /opt/electric-blue), <SERVICE_USER> (e.g. myuser)
+
+[Unit]
+Description=Whisper drop-folder transcription (API backend, watches inbox)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Replace <SERVICE_USER> with the user that owns <INSTALL_DIR>
+User=<SERVICE_USER>
+WorkingDirectory=<INSTALL_DIR>
+ExecStart=<INSTALL_DIR>/venv/bin/electric-blue
+
+# Secrets file (chmod 600) — keep keys out of this unit file:
+#   echo 'WHISPER_API_KEY=your_key_here' > <INSTALL_DIR>/transcribe.env && chmod 600 it
+EnvironmentFile=<INSTALL_DIR>/transcribe.env
+
+Environment=TRANSCRIBE_BASE=<INSTALL_DIR>/data
+Environment=TRANSCRIBE_INPUT=<INSTALL_DIR>/data/inbox
+Environment=WHISPER_BACKEND=api
+Environment=WHISPER_API_BASE=https://api.groq.com/openai/v1
+Environment=WHISPER_API_MODEL=whisper-large-v3-turbo
+Environment=WHISPER_LANG=en
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

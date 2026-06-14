@@ -1,0 +1,37 @@
+# --- Local agent / IDE config (never public) ---
+CLAUDE.md
+HOMELAB-CLAUDE.md.template
+.claude/
+.idea/
+.vscode/
+
+# --- Secrets & runtime data ---
+*.env
+transcribe.env
+.env
+data/
+*.log
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# --- Whisper model cache (large) ---
+*.bin
+models/
+
+# --- OS noise ---
+.DS_Store
+Thumbs.db

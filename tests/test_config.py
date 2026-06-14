@@ -1,0 +1,109 @@
+"""Hermetic tests for Config.from_env()."""
+
+from __future__ import annotations
+
+import os
+
+import pytest
+
+from electric_blue.config import Config
+
+
+def test_defaults(monkeypatch, tmp_path):
+    """With no env vars set, defaults should match original transcribe_watch.py values."""
+    # Clear all TRANSCRIBE_* and WHISPER_* vars so we get clean defaults
+    for key in list(os.environ):
+        if key.startswith(("TRANSCRIBE_", "WHISPER_", "NOTIFY_", "FFMPEG_")):
+            monkeypatch.delenv(key, raising=False)
+    # Override HOME so base_dir resolves predictably
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    cfg = Config.from_env()
+
+    expected_base = tmp_path / "transcribe"
+    assert cfg.base_dir == expected_base
+    assert cfg.input_dir == expected_base / "inbox"
+    assert cfg.output_dir == expected_base / "transcripts"
+    assert cfg.done_dir == expected_base / "done"
+    assert cfg.failed_dir == expected_base / "failed"
+    assert cfg.backend == "local"
+    assert cfg.language is None
+    assert cfg.model_size == "distil-large-v3"
+    assert cfg.device == "auto"
+    assert cfg.compute_type == "auto"
+    assert cfg.api_base_url == "https://api.groq.com/openai/v1"
+    assert cfg.api_model == "whisper-large-v3-turbo"
+    assert cfg.api_key == ""
+    assert cfg.notify_webhook == ""
+    assert cfg.ffmpeg_bin == "ffmpeg"
+    assert cfg.api_max_mb == 24
+    assert cfg.api_bitrate == "64k"
+    assert cfg.stability_seconds == 2.0
+    assert cfg.poll_interval == 1.0
+
+
+def test_env_overrides(monkeypatch, tmp_path):
+    """Env vars should override all defaults."""
+    monkeypatch.setenv("TRANSCRIBE_BASE", str(tmp_path / "base"))
+    monkeypatch.setenv("TRANSCRIBE_INPUT", str(tmp_path / "in"))
+    monkeypatch.setenv("TRANSCRIBE_OUTPUT", str(tmp_path / "out"))
+    monkeypatch.setenv("TRANSCRIBE_DONE", str(tmp_path / "done"))
+    monkeypatch.setenv("TRANSCRIBE_FAILED", str(tmp_path / "fail"))
+    monkeypatch.setenv("WHISPER_BACKEND", "api")
+    monkeypatch.setenv("WHISPER_LANG", "fr")
+    monkeypatch.setenv("WHISPER_MODEL", "tiny")
+    monkeypatch.setenv("WHISPER_DEVICE", "cpu")
+    monkeypatch.setenv("WHISPER_COMPUTE", "int8")
+    monkeypatch.setenv("WHISPER_API_BASE", "https://example.com/v1")
+    monkeypatch.setenv("WHISPER_API_MODEL", "whisper-1")
+    monkeypatch.setenv("WHISPER_API_KEY", "sk-test")
+    monkeypatch.setenv("NOTIFY_WEBHOOK", "https://hook.example.com")
+    monkeypatch.setenv("FFMPEG_BIN", "/usr/local/bin/ffmpeg")
+
+    cfg = Config.from_env()
+
+    assert cfg.base_dir == tmp_path / "base"
+    assert cfg.input_dir == tmp_path / "in"
+    assert cfg.output_dir == tmp_path / "out"
+    assert cfg.done_dir == tmp_path / "done"
+    assert cfg.failed_dir == tmp_path / "fail"
+    assert cfg.backend == "api"
+    assert cfg.language == "fr"
+    assert cfg.model_size == "tiny"
+    assert cfg.device == "cpu"
+    assert cfg.compute_type == "int8"
+    assert cfg.api_base_url == "https://example.com/v1"
+    assert cfg.api_model == "whisper-1"
+    assert cfg.api_key == "sk-test"
+    assert cfg.notify_webhook == "https://hook.example.com"
+    assert cfg.ffmpeg_bin == "/usr/local/bin/ffmpeg"
+
+
+def test_backend_lowercased(monkeypatch):
+    monkeypatch.setenv("WHISPER_BACKEND", "API")
+    cfg = Config.from_env()
+    assert cfg.backend == "api"
+
+
+def test_whisper_lang_empty_string_becomes_none(monkeypatch):
+    monkeypatch.setenv("WHISPER_LANG", "")
+    cfg = Config.from_env()
+    assert cfg.language is None
+
+
+def test_output_formats_frozen(monkeypatch):
+    cfg = Config.from_env()
+    assert cfg.output_formats == frozenset({"txt", "srt", "vtt", "json"})
+
+
+def test_media_exts_include_common(monkeypatch):
+    cfg = Config.from_env()
+    assert ".mp4" in cfg.media_exts
+    assert ".wav" in cfg.media_exts
+    assert ".mp3" in cfg.media_exts
+
+
+def test_config_is_frozen(monkeypatch):
+    cfg = Config.from_env()
+    with pytest.raises((AttributeError, TypeError)):
+        cfg.backend = "api"  # type: ignore[misc]
