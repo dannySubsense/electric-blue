@@ -119,12 +119,13 @@ class Segment:
 Existing `local` and `api` backends instantiate `Segment` without `speaker`; the default
 `None` means `to_dict()` produces the same dict they produce today. No existing test changes.
 
-**`schema_version` bump:**
-JSON output adds `"schema_version": 2` when at least one segment carries a speaker label;
-`schema_version: 1` (DDR-02's value) is preserved when no speakers are present. This
-means the version bump is output-driven, not backend-driven. (FLAG D3 — the exact policy here
-needs a decision: always emit `schema_version: 2` for this backend even if diarization
-produces no labels, or tie the version to the data?)
+**`schema_version` — RESOLVED by DDR-02 D4 (Danny review, 2026-06-14): stays at `1`.**
+~~JSON output adds `"schema_version": 2` when at least one segment carries a speaker label.~~
+The earlier "bump to 2" proposal is **overridden**: `speaker` is an *optional, additive* field,
+and adding an optional field is not a breaking change. **All diarized output remains
+`schema_version: 1`** — the version tracks schema *shape*, not file *content* (no "v2
+sometimes"). FLAG D3's schema-version sub-question is therefore closed; only the rendering
+sub-questions (txt/srt/vtt) remain open for the DDR-05 spec session.
 
 **`outputs.py` — speaker rendering:**
 
@@ -132,7 +133,7 @@ produces no labels, or tie the version to the data?)
 txt:   Plain text unchanged (speaker labels are in JSON/srt/vtt).  (FLAG D3)
 srt:   Cue text prefixed: "[SPEAKER_01] the spoken text"
 vtt:   Cue text prefixed: "[SPEAKER_01] the spoken text"
-json:  "speaker" key present on each segment when non-null; schema_version: 2
+json:  "speaker" key present on each segment when non-null; schema_version: 1 (additive)
 ```
 
 `write_outputs` detects diarization by checking `any(s.speaker for s in segments)`. When
@@ -234,9 +235,9 @@ need explicit sign-off. (FLAG D4.)
 - Add fixture: `segments_with_speakers` — list of `Segment` instances with `speaker` set
 - Assert SRT output contains `[SPEAKER_00]` prefix on the correct cue
 - Assert VTT output contains `[SPEAKER_01]` prefix on the correct cue
-- Assert JSON output contains `"speaker": "SPEAKER_00"` on diarized segments; `schema_version: 2`
+- Assert JSON output contains `"speaker": "SPEAKER_00"` on diarized segments; `schema_version: 1`
 - Assert JSON output for non-diarized segments (speaker=None): no `"speaker"` key in dict;
-  `schema_version: 1` (backward compatibility)
+  `schema_version: 1` (additive field; version unchanged whether or not speakers are present)
 - Assert TXT output is unchanged (plain text, no speaker prefix) — or test the flagged alternative
 
 **Opt-in smoke (`@pytest.mark.diarize_smoke`):**
@@ -324,9 +325,8 @@ need explicit sign-off. (FLAG D4.)
   **DECISION — segment-level only for v1, or word-level from day one?**
 
 - **D3 — Exact schema change and rendering.**
-  (a) `schema_version` value when diarization is present: bump to `2`, or keep `1` and treat
-  `speaker` as a purely additive optional field? Bumping signals "this is a richer document"
-  to consumers; not bumping is maximally backward-compatible.
+  (a) `schema_version` value when diarization is present: **RESOLVED by DDR-02 D4 — keep `1`;
+  `speaker` is a purely additive optional field, no bump.** (Closed; not re-litigated here.)
   (b) When `speaker is None`, should `to_dict()` omit the key entirely (current proposal) or
   emit `"speaker": null`? Omitting is cleaner for existing consumers; null is more explicit
   about the field's existence.

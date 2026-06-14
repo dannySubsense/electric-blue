@@ -46,28 +46,34 @@ Consumers with a working endpoint deserve structured, stable, signed, and redact
 Replace the freeform `{"text": ..., **meta}` dict with a typed v1 envelope. A common `_base_payload` function builds the shared fields; event-specific builders extend it.
 
 ```python
-# notify.py — payload builders (proposed shapes; field set is flagged D1)
+# notify.py — payload builders (proposed shapes; remaining field set is flagged D1)
 
-def _base_payload(event: str, cfg: Config, src: Path, t_start: float) -> dict:
-    return {
-        "schema_version": 1,               # FLAG D1 — version number + increment policy
+def _base_payload(event: str, cfg: Config, src: Path,
+                  started_at: datetime, finished_at: datetime | None = None) -> dict:
+    p = {
+        "schema_version": 1,               # additive policy fixed in DDR-02 D4
         "event": event,                    # "done" | "failed" | "started"   FLAG D6
         "file": src.name,                  # filename only — never str(src) (absolute path)
         "backend": cfg.backend,            # backend identifier; no secrets
-        "wall_sec": round(time.time() - t_start, 1),
+        "started_at": started_at.isoformat(timespec="seconds"),   # canonical instant (UTC)
     }
+    if finished_at is not None:            # absent only for the "started" event (D6)
+        p["finished_at"] = finished_at.isoformat(timespec="seconds")
+        p["wall_sec"] = round((finished_at - started_at).total_seconds(), 1)  # DERIVED, see below
+    return p
 
 def build_done_payload(
     cfg: Config,
     src: Path,
     info: TranscriptInfo,
     output_stems: dict[str, Path],
-    t_start: float,
+    started_at: datetime,
+    finished_at: datetime,
 ) -> dict:
-    p = _base_payload("done", cfg, src, t_start)
+    p = _base_payload("done", cfg, src, started_at, finished_at)
     p.update({
         "status": "done",
-        "duration_sec": round(info.duration, 1),
+        "duration_sec": round(info.duration, 1),   # audio length, not wall-clock
         "language": info.language,
         "backend": info.backend,           # e.g. "api:whisper-large-v3-turbo"
         "outputs": {fmt: path.name for fmt, path in output_stems.items()},
@@ -79,17 +85,28 @@ def build_failed_payload(
     cfg: Config,
     src: Path,
     error: Exception,
-    t_start: float,
+    started_at: datetime,
+    finished_at: datetime,
 ) -> dict:
-    p = _base_payload("failed", cfg, src, t_start)
+    p = _base_payload("failed", cfg, src, started_at, finished_at)
     p.update({
         "status": "failed",
         "error": str(error),               # exception message only; no traceback
     })
     return p
 
-# build_started_payload — added if D6 resolves to include "started"
+# build_started_payload(cfg, src, started_at) -> dict  — _base_payload with finished_at=None;
+#                                                         added if D6 resolves to include "started"
 ```
+
+**Timing fields — `started_at` / `finished_at` are canonical; `wall_sec` is derived (DDR-02 D4 + Frank's call, 2026-06-14).**
+The two timestamps are the source of truth; **`wall_sec` is defined as their difference, never an
+independent `time.time() - t_start` reading.** This is async-safe by construction: a sync backend's
+`finished_at - started_at` is processing time; an async/batch backend (DDR-03) reports `started_at`
+at submission and `finished_at` at completion, and `wall_sec` then honestly spans the queue/batch
+latency — the *same* fields mean the *same* thing across backends. No field is reserved "for later"
+and no backend forces a v2 bump: DDR-03 fills in the two timestamps it already has. Timestamps are
+UTC ISO-8601 (`timespec="seconds"`). `duration_sec` (audio length) is unrelated to `wall_sec`.
 
 Redaction commitments baked into `_base_payload`:
 - `src.name` (filename only) — never `str(src)` (absolute path).
@@ -192,17 +209,19 @@ def build_done_payload(
     src: Path,
     info: TranscriptInfo,
     output_stems: dict[str, Path],
-    t_start: float,
+    started_at: datetime,
+    finished_at: datetime,
 ) -> dict: ...
 
 def build_failed_payload(
     cfg: Config,
     src: Path,
     error: Exception,
-    t_start: float,
+    started_at: datetime,
+    finished_at: datetime,
 ) -> dict: ...
 
-# build_started_payload(cfg, src) -> dict  — added if D6 resolves yes
+# build_started_payload(cfg, src, started_at) -> dict  — added if D6 resolves yes
 ```
 
 The current `notify(cfg, text, meta)` signature is retired. All three call sites are in this repo (`watcher.py` × 2, DDR-03 drain × 1); there is no external API break.
@@ -216,25 +235,27 @@ After this DDR:
 
 ```python
 # watcher.process() — updated call sites
-t0 = time.time()
-# FLAG D6: notify(cfg, build_started_payload(cfg, src)) here if "started" is included
+started_at = datetime.now(timezone.utc)
+# FLAG D6: notify(cfg, build_started_payload(cfg, src, started_at)) here if "started" is included
 segments, info = transcribe(cfg, src)
 output_stems = write_outputs(cfg, cfg.output_dir, src.stem, segments, info)
 ...
-notify(cfg, build_done_payload(cfg, src, info, output_stems, t0))
+notify(cfg, build_done_payload(cfg, src, info, output_stems,
+                               started_at, datetime.now(timezone.utc)))
 
 # watcher.handle() — failure call site
 except Exception as e:
     log.error("Failed on %s: %s", path.name, e)
-    notify(cfg, build_failed_payload(cfg, path, e, t0))
+    notify(cfg, build_failed_payload(cfg, path, e,
+                                     started_at, datetime.now(timezone.utc)))
     shutil.move(...)
 ```
 
-`write_outputs()` currently returns `None`. It must be updated to return `dict[str, Path]` (format → output path). This is a behavior-preserving change; the only caller that reads the return value is `watcher.process()`.
+`write_outputs()` currently returns `None`. It must be updated to return `dict[str, Path]` (format → output path). This is a behavior-preserving change; the only caller that reads the return value today is `watcher.process()`. **Note (build order `04 → 03`):** DDR-03's drain calls `write_outputs()` too — it is authored *after* this change lands, so it is written against the `dict[str, Path]` return from the start; there is no second caller to retrofit.
 
 **DDR-03 async path:**
 
-DDR-03's drain/retrieval function will expose a completion hook — called after `fetch()` succeeds or a job expires. DDR-04's `build_done_payload()` / `build_failed_payload()` slot into that hook. The exact hook signature is DDR-03's decision; this DDR requires only that the hook receives `(cfg, src_path, info_or_exception, t_start)` or equivalent. No polling, no new threads — the drain path calls `notify()` synchronously, same as the sync path.
+DDR-03's drain/retrieval function will expose a completion hook — called after `fetch()` succeeds or a job expires. DDR-04's `build_done_payload()` / `build_failed_payload()` slot into that hook. The exact hook signature is DDR-03's decision; this DDR requires that the hook supplies `(cfg, src_path, info_or_exception, started_at, finished_at)` — and for a batch job those two instants come straight from the job record (`JobRecord.submitted_at` / `completed_at`), **not** from a `time.time()` reading in the draining process. That is the whole point of making the timestamps canonical: the ~24h batch boundary is represented honestly with zero schema change. No polling, no new threads — the drain path calls `notify()` synchronously, same as the sync path.
 
 **DDR-05 (diarization):**
 
@@ -246,8 +267,10 @@ New test file: `tests/test_notify.py`. All tests monkeypatch `requests.post`; no
 
 | Test | Asserts |
 |------|---------|
-| `test_done_payload_fields` | `build_done_payload()` returns correct `schema_version`, `event`, `file`, `status`, `duration_sec`, `language`, `backend`, `outputs`; `file` is filename only |
-| `test_failed_payload_fields` | `build_failed_payload()` returns `event="failed"`, `status="failed"`, typed `error` string |
+| `test_done_payload_fields` | `build_done_payload()` returns correct `schema_version`, `event`, `file`, `status`, `duration_sec`, `language`, `backend`, `outputs`, `started_at`, `finished_at`; `file` is filename only |
+| `test_failed_payload_fields` | `build_failed_payload()` returns `event="failed"`, `status="failed"`, typed `error` string, `started_at`, `finished_at` |
+| `test_wall_sec_is_derived` | given `started_at` and `finished_at` 90s apart, `wall_sec == 90.0` (exactly `finished_at - started_at`); timestamps are ISO-8601 UTC; an async-style 24h gap yields `wall_sec == 86400.0` with no schema change |
+| `test_started_event_omits_finished` | `_base_payload` with `finished_at=None` emits `started_at`, no `finished_at`, no `wall_sec` |
 | `test_no_absolute_paths` | `src` is `/home/user/inbox/meeting.mp4`; payload `file == "meeting.mp4"`; no field contains `/home` |
 | `test_no_api_key_in_payload` | `cfg.api_key = "sk-secret"`; `"sk-secret"` does not appear anywhere in the serialised payload |
 | `test_no_op_when_unset` | `notify_webhook=""` → `requests.post` is never called |
@@ -286,7 +309,7 @@ New test file: `tests/test_notify.py`. All tests monkeypatch `requests.post`; no
 
 ## Open questions / DECISIONS TO FLAG
 
-- **D1 — Payload schema + version number.** Is the proposed field set right for v1? Should `outputs` carry full relative paths (e.g. `transcripts/meeting.txt`) or just filenames? Should a `snippet` (first ~200 chars of transcript text) be included, or is that scope creep for v1? What is the version increment policy — integer bump, semver, or date string — and where is it documented?
+- **D1 — Payload schema (remaining open bits).** *Resolved:* version policy is **integer, additive, starting at `schema_version: 1`** (fixed in DDR-02 D4 — documented there); **timing fields are `started_at`/`finished_at` canonical with `wall_sec` derived** (Frank's call, §1). *Still open:* should `outputs` carry full relative paths (e.g. `transcripts/meeting.txt`) or just filenames? Should a `snippet` (first ~200 chars of transcript text) be included, or is that scope creep for v1?
 
 - **D2 — Providers day one.** Generic-only (post the structured dict; consumers adapt their own mapping) vs ship built-in Slack / Teams / ntfy formatters from the start. Generic is safe and zero-maintenance. Formatters add direct value for the homelab (Teams/ntfy) but add test surface and the Teams shape is already deprecated-in-flight. *Lean: generic + ntfy day one; Teams deferred.*
 

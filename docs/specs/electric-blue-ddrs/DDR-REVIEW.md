@@ -25,6 +25,17 @@
 
 ## Cross-cutting issues
 
+> **Resolution status (2026-06-14, after Danny's PR #3 review + Frank's calls).** The findings
+> below are the original review record, preserved as-found. Current dispositions:
+> **C1, C2, C3 — RESOLVED in DDR-04 §1/§7:** the hook contract is settled in DDR-04 (built first
+> per the `02 → 04 → 03` re-sequence). The payload carries canonical `started_at`/`finished_at`
+> ISO-8601 timestamps (`wall_sec` derived), the hook signature
+> `(cfg, src, info_or_exc, started_at, finished_at)` covers the failure/expiry branch, and the
+> `time.time() - t_start` wall-clock fabrication is removed — DDR-03's drain supplies the two
+> instants from `JobRecord.submitted_at`/`completed_at` with no schema change.
+> **C4 — RESOLVED in DDR-02 D4:** `schema_version` is additive at v1; no "v2 sometimes."
+> **C5 — RESOLVED:** DDR-04 added to DDR-02's `Blocks` line.
+
 **C1 — Completion-hook signature mismatch (DDR-03 §8 ⇄ DDR-04 §7). Severity: MED.**
 DDR-03 §8 exposes `_fire_completion_hook(cfg, record, info)`. DDR-04 §7 states it needs the hook to receive `(cfg, src_path, info_or_exception, t_start)` and its `build_done_payload(cfg, src, info, output_stems, t_start)` additionally requires `output_stems`. DDR-03's hook passes neither `output_stems` nor `t_start`, and passes `record` rather than `src`. Both DDRs defer to the other ("DDR-04 owns the payload" / "hook signature is DDR-03's decision"), so nothing is asserted-as-settled-but-wrong — but the two ends do not currently fit. Resolve the exact hook signature once, in whichever DDR is implemented first.
 

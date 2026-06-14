@@ -1,11 +1,11 @@
 # DDR-02 — Backend Seam + API Characterization Tests
 
-- **Status:** PROPOSED (awaiting Danny review)
+- **Status:** ACCEPTED (Danny review 2026-06-14, PR #3) — decisions resolved below
 - **Author:** reed
 - **Date:** 2026-06-14
-- **Sprint (on approval):** `backend-seam`
+- **Sprint (on approval):** `backend-seam` (next sprint per re-sequence 02 → 04 → 03 → 05 → 06)
 - **Depends on:** DDR-01 (scaffolding) — DONE
-- **Blocks:** DDR-03 (Groq Batch), DDR-05 (WhisperX) — both add backends through this seam
+- **Blocks:** DDR-04 (webhook — built next, on this sync seam), DDR-03 (Groq Batch), DDR-05 (WhisperX)
 - **Supersedes:** —
 
 ---
@@ -15,31 +15,39 @@
 After DDR-01, transcription lives in `src/electric_blue/backends/`:
 `backends/__init__.py` exposes `transcribe(cfg, src) -> (segments, info)` and dispatches on
 `cfg.backend` to `local.py` (faster-whisper) or `api.py` (OpenAI-compatible HTTP). This is a
-thin `if/else`, not an interface. Two more backends are known-incoming:
+thin `if/else`, not an interface. More backends are known-incoming:
 
+- **DDR-05 WhisperX diarization** — a *synchronous* backend that adds *speaker labels*,
+  evolving the output schema. Fits the sync seam directly; it is the concrete consumer that
+  justifies defining the seam now.
 - **DDR-03 Groq Batch** — *asynchronous*: submit a job, poll, retrieve later (~24h window).
-- **DDR-05 WhisperX diarization** — adds *speaker labels*, changing the output schema.
+  This one does **not** fit a synchronous dispatch — but its accommodation is **deferred** (see
+  §3 / D3): it rests on an unverified external (does Groq Batch accept audio?), so the async
+  seam is designed in the DDR-03 sprint, not cemented here.
 
-Neither slots cleanly into a synchronous two-function dispatch. The `api` backend also has
-**no real test coverage** today — only `local` is exercised end-to-end by the smoke test, so
-any refactor of the backend layer is currently unguarded on the `api` side.
+The `api` backend also has **no real test coverage** today — only `local` is exercised
+end-to-end by the smoke test, so any refactor of the backend layer is currently unguarded on
+the `api` side.
 
 ## Principle
 
-Define the extension point *before* extending it. Two concrete backends are coming; designing
-the seam now is justified, not speculative abstraction. Pin existing behavior with
-characterization tests *first*, so the seam refactor is provably behavior-preserving.
+Define the extension point *before* extending it — but only for the extension you can see
+clearly. A concrete *synchronous* consumer (DDR-05 diarization) plus the untested `api` path
+justify defining and pinning the sync seam now; that is not speculative abstraction. The
+*asynchronous* extension is deferred until its external dependency is verified, rather than
+shaped to an imagined lifecycle. Pin existing behavior with characterization tests *first*, so
+the seam refactor is provably behavior-preserving.
 
 ## Decision
 
 ### 1. A `Backend` interface + registry
 
-Introduce an explicit backend contract (Protocol or ABC — see Decision D1) in
-`backends/base.py`, and a registry/factory `get_backend(cfg) -> Backend` keyed by
-`cfg.backend`. `local` and `api` are refactored to implement it. `transcribe(cfg, src)`
-becomes a thin wrapper that resolves the backend and calls it.
+Introduce an explicit backend contract — a **`Protocol`** (D1 resolved) — in
+`backends/base.py`, and a registry/factory `get_backend(cfg) -> Backend`, an **internal dict**
+keyed by `cfg.backend` (D2 resolved). `local` and `api` are refactored to implement it.
+`transcribe(cfg, src)` becomes a thin wrapper that resolves the backend and calls it.
 
-Proposed contract (shape, not final — fields flagged below):
+Contract:
 
 ```python
 class Backend(Protocol):
@@ -57,34 +65,44 @@ Where `Transcript` carries `segments: list[Segment]` and `info: TranscriptInfo`
 A small declarative record each backend exposes, so the watcher/CLI can reason about a
 backend without special-casing it:
 
-- `is_async: bool` — does it complete in one call, or submit-then-retrieve? (DDR-03 = True)
 - `supports_diarization: bool` — speaker labels? (DDR-05 = True)
 - `max_upload_mb: int | None` — encode/size guard (api = 24; local = None)
 - `needs_network: bool`, `needs_gpu_recommended: bool` — for docs/routing.
 
-### 3. Async-capable seam (the load-bearing decision)
+> **`is_async` is deferred to DDR-03** (D5 resolution). It only has meaning once an async
+> backend exists, and it pairs with the `AsyncBackend` sub-protocol that this DDR no longer
+> introduces (D3). DDR-03 adds both `AsyncBackend` and the `is_async` capability together.
 
-Because DDR-03 is asynchronous, the seam must accommodate a two-phase backend **without**
-forcing the synchronous backends to fake it. Proposed: an optional async sub-protocol —
+### 3. Async seam — DEFERRED to DDR-03 (D3 resolution)
 
-```python
-class AsyncBackend(Protocol):           # opt-in; only batch implements it
-    def submit(self, cfg, src) -> JobRef: ...
-    def poll(self, cfg, job: JobRef) -> JobStatus: ...
-    def fetch(self, cfg, job: JobRef) -> Transcript: ...
-```
+**This DDR defines a synchronous seam only.** The `AsyncBackend` (`submit/poll/fetch`)
+sub-protocol originally proposed here is **cut** and moves to the DDR-03 (`groq-batch`) sprint,
+to be designed once Groq Batch audio support is verified for real (DDR-03 D6).
 
-Synchronous backends (`local`, `api`, `whisperx`) implement only `transcribe()`. The watcher
-calls `transcribe()` for sync backends; async backends are driven by a separate drain/poll
-path defined in DDR-03. **This DDR fixes the *shape* of the async seam so DDR-03 has a stable
-anchor; the job-store and polling mechanism are DDR-03's scope.**
+Rationale (Danny + Frank, 2026-06-14): the async shape was justified *solely* by DDR-03, whose
+lifecycle rests on the unverified assumption that Groq Batch accepts audio transcription.
+Cementing a speculative sub-protocol into the foundation is the one real foot-gun here. The
+sync `Backend` Protocol, the registry, `Capabilities`, `schema_version`, and the API
+characterization tests all stand on their own and need nothing from DDR-03.
 
-### 4. Output-schema versioning (anticipating DDR-05)
+All backends in this DDR (`local`, `api`) implement only `transcribe()`. DDR-03 introduces
+`AsyncBackend` + the `is_async` capability + the drain/poll path together, anchored to the
+*then-proven* batch lifecycle rather than to an imagined one.
 
-DDR-05 will add speaker labels, changing the JSON output. To avoid a breaking change later,
-**add a `schema_version` field to the JSON output now** (e.g. `"schema_version": 1`), and keep
-`speaker`-type fields optional/additive from the start. This is a one-line addition in DDR-02
-that saves a breaking migration in DDR-05.
+### 4. Output-schema versioning (anticipating DDR-05) — policy fixed (D4 resolution, resolves C4)
+
+**Add `"schema_version": 1` to the JSON output now, and the version is data-independent:**
+
+- The number tracks the **schema shape**, never the *content* of a given file. A transcript
+  does not get a different `schema_version` because it happens to contain speaker labels.
+- **Speaker fields are optional and additive at v1.** When DDR-05 lands diarization, the
+  `speaker` field is simply present-or-absent on segments at the *same* `schema_version: 1` —
+  adding an optional field is not a breaking change and does not bump the version.
+- `schema_version` bumps to 2 only on a **breaking** change (removing/renaming a field,
+  changing a type, changing required-ness) — and that is a *future* DDR's decision, not DDR-05's.
+
+This explicitly overrides DDR-05's earlier "diarized docs are v2" proposal (cross-issue **C4**):
+there is no "v2 sometimes." DDR-05 must conform — diarization is additive at v1.
 
 ### 5. API characterization tests (do these FIRST in the sprint)
 
@@ -99,40 +117,51 @@ Pin `local` selection/dispatch with a mocked model (the real run stays in the sm
 
 ### 6. Ride-along housekeeping
 
-Bump **DDR-01 `Status: PROPOSED` → `ACCEPTED`** in this branch (DDR-01's sprint is merged; the
-file is just stale).
+DDR-01 `Status` is now **ACCEPTED** (it was stale at `PROPOSED`; corrected on this branch since
+DDR-01's sprint is merged). Done — no remaining action.
 
 ---
 
 ## Sequencing (within the sprint)
 
 1. Write characterization tests against the *current* `api`/`local` code — all green.
-2. Introduce `base.py` (`Backend`/`AsyncBackend`/`Capabilities`/`Transcript`), `get_backend()`.
+2. Introduce `base.py` (`Backend`/`Capabilities`/`Transcript` — **sync seam only, no `AsyncBackend`**), `get_backend()`.
 3. Refactor `local.py`/`api.py` to implement `Backend`; `transcribe()` becomes the wrapper.
-4. Add `schema_version` to JSON output (+ test).
+4. Add `schema_version: 1` to JSON output, speaker fields optional/additive (+ test).
 5. Characterization tests still green (behavior-preserving). Frank gate.
 
 ## Risks
 
-- **Premature abstraction** — mitigated: two concrete consumers (DDR-03/05) define the
-  requirements; the seam is shaped to them, not to imagined ones.
-- **Async sub-protocol over-design** — mitigated: only the *shape* is fixed here; mechanism is
-  DDR-03. If DDR-03 review reshapes it, that's expected and cheap (no backend uses it yet).
+- **Premature abstraction** — mitigated: the remaining seam has two concrete sync consumers
+  today (`local`, `api`); the one speculative piece (`AsyncBackend`) was cut to DDR-03 per the
+  review, so nothing in this DDR is shaped to an unverified consumer.
+- ~~Async sub-protocol over-design~~ — **eliminated**: the async seam is deferred to DDR-03
+  (D3), where it will be designed against a verified Groq Batch lifecycle.
 - **Characterization tests cementing a bug** — call out any current `api` behavior that looks
   wrong during test-writing rather than blindly pinning it.
 
-## Open questions / DECISIONS TO FLAG (resolve with Danny, do not block drafting)
+## Decisions — RESOLVED (Danny review, PR #3, 2026-06-14)
 
-- **D1 — Protocol vs ABC** for `Backend`. Protocol = structural, lighter, no inheritance;
-  ABC = explicit `register`, runtime enforcement. *Lean: Protocol* (simpler, Pythonic), but
-  ABC if we want hard runtime guarantees. **DECISION.**
-- **D2 — Registry mechanism.** Internal dict (`{"local": LocalBackend, ...}`) vs Python
-  entry-points plugin system (third parties can ship backends). *Lean: internal dict now*;
-  entry-points is a future DDR if we ever want external backends. **DECISION.**
-- **D3 — Async seam now vs defer to DDR-03.** Fix the `submit/poll/fetch` shape here (my
-  proposal) so DDR-03 anchors to it, or leave the seam sync-only and let DDR-03 introduce the
-  async shape. *Lean: fix the shape here.* **DECISION.**
-- **D4 — `schema_version` starting value + policy** (1? semantic? where documented).
-  **DECISION.**
-- **D5 — Capability-flag set** — is the proposed set (D2 §2) right, or over/under-specified?
-  **DECISION.**
+- **D1 — Protocol vs ABC** → **Protocol.** Structural, lighter, Pythonic; the documented lean,
+  unchallenged in review. (Revisit only if we later want hard runtime registration guarantees.)
+- **D2 — Registry mechanism** → **internal dict** (`{"local": LocalBackend, ...}`).
+  Entry-points plugin system is a future DDR if external backends are ever wanted.
+- **D3 — Async seam** → **DEFER to DDR-03** (Danny's explicit preference, condition 1). The
+  `AsyncBackend` sub-protocol is cut from this DDR; see §3. Removes the only speculative piece
+  of the foundation.
+- **D4 — `schema_version`** → **start at `1`, data-independent, additive; speakers optional at
+  v1** (Danny's condition 2). No "v2 sometimes." See §4. Resolves cross-issue **C4**.
+- **D5 — Capability-flag set** → keep `supports_diarization`, `max_upload_mb`, `needs_network`,
+  `needs_gpu_recommended`; **`is_async` moves to DDR-03** with `AsyncBackend` (it has no meaning
+  without an async backend). See §2.
+
+### Forward note — DDR-03 ⇄ DDR-04 completion-hook contract (C1–C3)
+
+Not in this DDR's scope, but tracked here for the foundation. **Resolved (Frank's call,
+2026-06-14):** because the re-sequence builds DDR-04 first — the sprint that *freezes* the
+notification payload — the timing contract is decided **in DDR-04 now**, not deferred to "the
+second DDR." DDR-04 v1 carries `started_at` / `finished_at` as canonical ISO-8601 timestamps
+with `wall_sec` derived as their difference; this is async-safe by construction, so DDR-03's
+drain simply supplies the two instants from `JobRecord.submitted_at` / `completed_at` with **no
+schema change**. The earlier `now - t_start` wall-clock — a fabrication across a ~24h batch
+boundary — is gone. (C1–C3 closed in DDR-04 §1/§7.)

@@ -4,17 +4,26 @@
 - **Author:** reed
 - **Date:** 2026-06-14
 - **Sprint (on approval):** `groq-batch-backend`
-- **Depends on:** DDR-02 (backend seam + AsyncBackend protocol) — PROPOSED
+- **Depends on:** DDR-02 (sync backend seam, registry, `Capabilities`, `schema_version`) — ACCEPTED
 - **Blocks:** DDR-04 (completion webhook)
 - **Supersedes:** —
+
+> **Scope update (Danny + Frank review, 2026-06-14):** `AsyncBackend` was **deferred out of
+> DDR-02 into this DDR**. DDR-02 ships a sync-only seam; **this DDR now *defines* the
+> `AsyncBackend` (`submit`/`poll`/`fetch`) sub-protocol and the `is_async` capability**, not
+> just consumes them — and does so only once D6 (does Groq Batch accept audio?) is verified. If
+> D6 fails, the async seam is never built. Build order is `02 → 04 → 03`: DDR-04 lands first on
+> DDR-02's sync seam, so this DDR adapts its completion-hook call site to DDR-04's contract
+> (see C1–C3).
 
 ---
 
 ## Context
 
-DDR-02 §3 defined an `AsyncBackend` sub-protocol (`submit` / `poll` / `fetch`) to
-accommodate asynchronous transcription providers without burdening sync backends.
-Groq's Batch API is the first concrete consumer of that seam.
+This DDR **defines** an `AsyncBackend` sub-protocol (`submit` / `poll` / `fetch`) to
+accommodate asynchronous transcription providers without burdening sync backends — the shape
+originally sketched in DDR-02 §3, deferred here so it is designed against a *verified* Groq
+Batch lifecycle rather than an assumed one. Groq's Batch API is its first concrete consumer.
 
 Groq Batch offers approximately 50% cost reduction relative to synchronous
 `/audio/transcriptions` calls in exchange for up to ~24 hours of latency. For the
@@ -47,8 +56,8 @@ retrieval are fully decoupled; they share nothing except the state store.
 
 ### 1. Backend class: `backends/batch_groq.py`
 
-Anchors to the `AsyncBackend` protocol defined in DDR-02 §3. This DDR does not
-redefine the seam; it provides the implementation.
+Defines the `AsyncBackend` protocol (deferred here from DDR-02 §3, see scope note above) and
+provides its first implementation. Add the `is_async` capability flag alongside it.
 
 ```python
 # src/electric_blue/backends/batch_groq.py
