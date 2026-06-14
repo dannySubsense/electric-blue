@@ -1,4 +1,4 @@
-.PHONY: gate smoke fmt lint test
+.PHONY: gate smoke fmt lint test dev
 
 gate:
 	black --check .
@@ -16,3 +16,7 @@ test:
 
 smoke:
 	pytest -m smoke
+
+dev:
+	pip install -e ".[local,dev]"
+	pre-commit install
