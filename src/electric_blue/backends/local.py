@@ -9,6 +9,7 @@ from pathlib import Path
 from ..audio import extract
 from ..config import Config
 from ..models import Segment, TranscriptInfo
+from .base import Capabilities, Transcript
 
 log = logging.getLogger("electric_blue")
 
@@ -35,23 +36,32 @@ def _get_model(cfg: Config):
     return _model
 
 
-def transcribe_local(cfg: Config, src: Path) -> tuple[list[Segment], TranscriptInfo]:
-    with tempfile.TemporaryDirectory() as tmp:
-        wav = Path(tmp) / "a.wav"
-        extract(cfg, src, wav, compressed=False)
-        model = _get_model(cfg)
-        seg_gen, info = model.transcribe(
-            str(wav),
-            language=cfg.language,
-            beam_size=5,
-            vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 500},
-        )
-        segments = [Segment(start=s.start, end=s.end, text=s.text.strip()) for s in seg_gen]
-    transcript_info = TranscriptInfo(
-        language=info.language,
-        language_probability=round(info.language_probability, 3),
-        duration=round(info.duration, 2),
-        backend=f"local:{cfg.model_size}",
+class LocalBackend:
+    name: str = "local"
+    capabilities: Capabilities = Capabilities(
+        supports_diarization=False,
+        max_upload_mb=None,
+        needs_network=False,
+        needs_gpu_recommended=True,
     )
-    return segments, transcript_info
+
+    def transcribe(self, cfg: Config, src: Path) -> Transcript:
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "a.wav"
+            extract(cfg, src, wav, compressed=False)
+            model = _get_model(cfg)
+            seg_gen, info = model.transcribe(
+                str(wav),
+                language=cfg.language,
+                beam_size=5,
+                vad_filter=True,
+                vad_parameters={"min_silence_duration_ms": 500},
+            )
+            segments = [Segment(start=s.start, end=s.end, text=s.text.strip()) for s in seg_gen]
+        transcript_info = TranscriptInfo(
+            language=info.language,
+            language_probability=round(info.language_probability, 3),
+            duration=round(info.duration, 2),
+            backend=f"local:{cfg.model_size}",
+        )
+        return Transcript(segments=segments, info=transcript_info)

@@ -8,14 +8,17 @@ Spec committed @ `d33f717`. Governance: `docs/INVARIANTS.md` + `docs/CADENCE.md`
 ## Slices
 - [x] S1 — Characterization Tests (pre-refactor): 22 char tests (20 API + 2 local) green vs CURRENT code — COMPLETE (2026-06-14)
 - [x] S2 — base.py: Backend Protocol + Capabilities + Transcript — COMPLETE (2026-06-14)
-- [ ] S3 — Registry + get_backend() + refactor local/api (21 char tests still green; +registry test) — IN_PROGRESS (next)
-- [ ] S4 — schema_version: 1 in outputs.py + test — PENDING
+- [x] S3 — Registry + get_backend() + refactor local/api — COMPLETE (2026-06-14); 21 surviving char tests green UNEDITED + registry test; INV-2/INV-11 TARGET→MET
+- [ ] S4 — schema_version: 1 in outputs.py + test — IN_PROGRESS (next)
 - [ ] S5 — full gate + smoke + Frank build gate — PENDING
 
 ## Current
-Slice: S3
-Step: @code-executor (registry + get_backend + refactor local/api) ; @test-writer (registry error test)
+Slice: S4
+Step: @code-executor (schema_version:1 in outputs.py) ; @test-writer (test_json_schema_version)
 Branch: sprint/backend-seam
+
+## NOTE: README.md working-tree edit is the USER's (Bowie lyrics, unrelated to sprint). Do NOT stage or
+## revert it — sprint commits stage explicit file lists only. QC flagged it on S3; resolved as user work.
 
 ## ENV NOTE (load-bearing for S3+)
 The local `.venv` was a NON-editable install (imported electric_blue from a site-packages COPY, not

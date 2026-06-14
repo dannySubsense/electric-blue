@@ -61,30 +61,3 @@ def test_local_dispatch_returns_segments_and_info(monkeypatch, tmp_path):
     assert all(isinstance(s, Segment) for s in segments)
     assert isinstance(info, TranscriptInfo)
     assert info.backend.startswith("local:")
-
-
-def test_dispatch_unknown_backend_routes_local(monkeypatch, tmp_path):
-    """PRE-REFACTOR ONLY (slice S1) — pins current silent-local-fallback behavior.
-
-    The current backends/__init__.py uses an ``else`` catch-all (line 17) that silently
-    routes ANY backend value that is not ``"api"`` — including unknown strings — to the
-    local backend.  This test asserts that ``backend="bogus"`` does NOT raise and that
-    the result comes from the local path (info.backend starts with "local:").
-
-    This test is EXPECTED to break in slice S3 (post-refactor):
-    ``get_backend()`` will raise ``RuntimeError`` for ``"bogus"``.  It is superseded by
-    ``test_get_backend_unknown_raises`` in ``tests/test_backends_registry.py``, which
-    encodes the ONE deliberately-replaced behavior (fail-loud over silent-wrong-backend).
-    Do not attempt to keep this test green past S3.
-    """
-    monkeypatch.setattr("electric_blue.backends.local.extract", fake_extract)
-    monkeypatch.setattr("electric_blue.backends.local._get_model", lambda cfg: FakeWhisperModel())
-    cfg = dataclasses.replace(Config.from_env(), backend="bogus")
-    src = tmp_path / "clip.wav"
-    src.write_bytes(b"not real audio")
-
-    segments, info = transcribe(cfg, src)  # must NOT raise pre-refactor
-
-    assert isinstance(segments, list)
-    assert isinstance(info, TranscriptInfo)
-    assert info.backend.startswith("local:")  # silently routed via else catch-all
