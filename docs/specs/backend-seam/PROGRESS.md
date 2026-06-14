@@ -1,6 +1,6 @@
 # Progress: backend-seam
 
-## Status: IN_PROGRESS
+## Status: COMPLETE — all 5 slices built, Frank BUILD gate SHIP, ready for PR
 
 Sprint: backend-seam (issue #4 / DDR-02). Branch: `sprint/backend-seam` (off `main` @ `724563c`).
 Spec committed @ `d33f717`. Governance: `docs/INVARIANTS.md` + `docs/CADENCE.md` (on main via PR #5).
@@ -10,12 +10,17 @@ Spec committed @ `d33f717`. Governance: `docs/INVARIANTS.md` + `docs/CADENCE.md`
 - [x] S2 — base.py: Backend Protocol + Capabilities + Transcript — COMPLETE (2026-06-14)
 - [x] S3 — Registry + get_backend() + refactor local/api — COMPLETE (2026-06-14); 21 surviving char tests green UNEDITED + registry test; INV-2/INV-11 TARGET→MET
 - [x] S4 — schema_version: 1 in outputs.py + test_json_schema_version — COMPLETE (2026-06-14); INV-10 TARGET→MET
-- [ ] S5 — full gate + smoke + Frank build gate — IN_PROGRESS (next)
+- [x] S5 — full gate + smoke + Frank build gate — COMPLETE (2026-06-14); gate 47 passed, smoke 1 passed, Frank SHIP
 
 ## Current
-Slice: S4
-Step: @code-executor (schema_version:1 in outputs.py) ; @test-writer (test_json_schema_version)
+Slice: DONE — sprint complete. Next: PR sprint/backend-seam → main.
 Branch: sprint/backend-seam
+
+## S5 attestation (INV-4 / CADENCE P6+P8)
+- `make gate` → 47 passed, 1 deselected; black + ruff clean (via editable venv, sourced from src/).
+- `make smoke` → 1 passed (real tiny faster-whisper model + imageio-ffmpeg, LocalBackend via registry).
+- Frank BUILD gate → SHIP (verified api/local bodies verbatim line-by-line; INV-2/10/11 flips real;
+  MET invariants not regressed; owned change contained to dispatch only).
 
 ## NOTE: README.md working-tree edit is the USER's (Bowie lyrics, unrelated to sprint). Do NOT stage or
 ## revert it — sprint commits stage explicit file lists only. QC flagged it on S3; resolved as user work.
