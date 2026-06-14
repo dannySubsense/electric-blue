@@ -139,3 +139,40 @@ def test_json_schema_version(cfg_with_output, sample_data):
     data = json.loads((out_dir / "clip.json").read_text())
     assert data["schema_version"] == 1
     assert isinstance(data["schema_version"], int)
+
+
+# ---------------------------------------------------------------------------
+# write_outputs return value (OUT-1, OUT-2)
+# ---------------------------------------------------------------------------
+
+
+def test_write_outputs_returns_stems(cfg_with_output, sample_data):
+    """OUT-1: write_outputs returns dict[str, Path] keyed by every enabled format.
+
+    Keys == cfg.output_formats; each value is a Path whose name is
+    '<stem>.<fmt>' and which exists on disk after the call.
+    """
+    cfg, out_dir = cfg_with_output
+    out_dir.mkdir(parents=True, exist_ok=True)
+    segments, info = sample_data
+    result = write_outputs(cfg, out_dir, "clip", segments, info)
+    assert isinstance(result, dict)
+    assert set(result.keys()) == cfg.output_formats
+    for fmt, path in result.items():
+        assert path.name == f"clip.{fmt}"
+        assert path.exists()
+
+
+def test_return_value_single_format(cfg_with_output, sample_data):
+    """OUT-2: write_outputs returns a one-entry dict when only one format is enabled."""
+    import dataclasses
+
+    cfg, out_dir = cfg_with_output
+    single_fmt_cfg = dataclasses.replace(cfg, output_formats=frozenset({"txt"}))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    segments, info = sample_data
+    result = write_outputs(single_fmt_cfg, out_dir, "clip", segments, info)
+    assert isinstance(result, dict)
+    assert set(result.keys()) == {"txt"}
+    assert result["txt"].name == "clip.txt"
+    assert result["txt"].exists()
