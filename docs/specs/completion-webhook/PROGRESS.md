@@ -7,15 +7,15 @@ Spec on main (PR #11). Run gate via `PATH="$PWD/.venv/bin:$PATH" make gate` (INV
 
 ## Slices
 - [x] S1 — Characterization tests (CHAR-1..4 pin current notify() stub) — COMPLETE
-- [ ] S2 — Config additions (4 fields + from_env + test_config) — PENDING
+- [x] S2 — Config additions (4 fields + from_env + test_config) — COMPLETE
 - [ ] S3 — Payload builders + redaction tests — PENDING
 - [ ] S4 — write_outputs() -> dict[str,Path] — PENDING
 - [ ] S5 — notify() rewrite + watcher integration (19 new tests; CHAR-3/4 superseded) — PENDING
 - [ ] S6 — full gate + smoke + Frank build gate — PENDING
 
 ## Current
-Slice: S2
-Step: @code-executor (config additions)
+Slice: S3
+Step: @code-executor (payload builders) + @test-writer (redaction tests)
 
 ## Behavior-preservation note (INV-3)
 notify() is an OWNED API rewrite (signature changes) — NOT behavior-preserving. Only never-raises and

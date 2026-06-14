@@ -40,6 +40,11 @@ def test_defaults(monkeypatch, tmp_path):
     assert cfg.api_bitrate == "64k"
     assert cfg.stability_seconds == 2.0
     assert cfg.poll_interval == 1.0
+    # CFG-1: new webhook config fields
+    assert cfg.notify_timeout_sec == 5.0
+    assert cfg.notify_retries == 0
+    assert cfg.notify_format == "generic"
+    assert cfg.notify_hmac_secret == ""
 
 
 def test_env_overrides(monkeypatch, tmp_path):
@@ -107,3 +112,40 @@ def test_config_is_frozen(monkeypatch):
     cfg = Config.from_env()
     with pytest.raises((AttributeError, TypeError)):
         cfg.backend = "api"  # type: ignore[misc]
+
+
+def test_notify_timeout_sec_env_override(monkeypatch):
+    """CFG-2: NOTIFY_TIMEOUT_SEC is parsed as float."""
+    monkeypatch.setenv("NOTIFY_TIMEOUT_SEC", "2.5")
+    cfg = Config.from_env()
+    assert cfg.notify_timeout_sec == 2.5
+    assert isinstance(cfg.notify_timeout_sec, float)
+
+
+def test_notify_retries_env_override(monkeypatch):
+    """CFG-3: NOTIFY_RETRIES is parsed as int."""
+    monkeypatch.setenv("NOTIFY_RETRIES", "3")
+    cfg = Config.from_env()
+    assert cfg.notify_retries == 3
+    assert isinstance(cfg.notify_retries, int)
+
+
+def test_notify_format_lowercased(monkeypatch):
+    """CFG-4: NOTIFY_FORMAT value is lowercased regardless of input case."""
+    monkeypatch.setenv("NOTIFY_FORMAT", "NTFY")
+    cfg = Config.from_env()
+    assert cfg.notify_format == "ntfy"
+
+
+def test_notify_hmac_secret_env_override(monkeypatch):
+    """CFG-5: NOTIFY_HMAC_SECRET is stored as-is (no transformation)."""
+    monkeypatch.setenv("NOTIFY_HMAC_SECRET", "abc123")
+    cfg = Config.from_env()
+    assert cfg.notify_hmac_secret == "abc123"
+
+
+def test_notify_new_fields_frozen(monkeypatch):
+    """CFG-7: the new Config fields are also immutable after construction."""
+    cfg = Config.from_env()
+    with pytest.raises((AttributeError, TypeError)):
+        cfg.notify_timeout_sec = 99.0  # type: ignore[misc]

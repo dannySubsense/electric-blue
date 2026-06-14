@@ -32,6 +32,10 @@ class Config:
 
     # Notifications
     notify_webhook: str
+    notify_timeout_sec: float
+    notify_retries: int
+    notify_format: str
+    notify_hmac_secret: str
 
     # FFmpeg
     ffmpeg_bin: str
@@ -69,6 +73,10 @@ class Config:
             api_model=os.environ.get("WHISPER_API_MODEL", "whisper-large-v3-turbo"),
             api_key=os.environ.get("WHISPER_API_KEY", ""),
             notify_webhook=os.environ.get("NOTIFY_WEBHOOK", ""),
+            notify_timeout_sec=float(os.environ.get("NOTIFY_TIMEOUT_SEC", "5.0")),
+            notify_retries=int(os.environ.get("NOTIFY_RETRIES", "0")),
+            notify_format=os.environ.get("NOTIFY_FORMAT", "generic").lower(),
+            notify_hmac_secret=os.environ.get("NOTIFY_HMAC_SECRET", ""),
             ffmpeg_bin=os.environ.get("FFMPEG_BIN", "ffmpeg"),
             output_formats=frozenset({"txt", "srt", "vtt", "json"}),
             media_exts=frozenset(
