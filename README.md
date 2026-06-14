@@ -1,5 +1,17 @@
 # electric-blue
 
+
+Blue, blue
+I will sit right down
+Waiting for the gift of sound and vision
+And I will sing
+Waiting for the gift of sound and vision
+Drifting into my solitude
+Over my head
+
+Don't you wonder sometimes
+'Bout sound and vision?
+
 Drop a video or audio file into a watched folder; get back `.txt` / `.srt` / `.vtt` / `.json`
 transcripts. Two interchangeable backends:
 
