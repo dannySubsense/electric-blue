@@ -49,7 +49,7 @@ def write_outputs(
         (out_dir / f"{stem}.vtt").write_text("\n".join(lines), encoding="utf-8")
 
     if "json" in cfg.output_formats:
-        payload = {**info.to_dict(), "text": full, "segments": seg_dicts}
+        payload = {"schema_version": 1, **info.to_dict(), "text": full, "segments": seg_dicts}
         (out_dir / f"{stem}.json").write_text(
             json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
         )

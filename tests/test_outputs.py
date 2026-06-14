@@ -129,3 +129,13 @@ def test_all_four_files_created(cfg_with_output, sample_data):
     write_outputs(cfg, out_dir, "clip", segments, info)
     for ext in ("txt", "srt", "vtt", "json"):
         assert (out_dir / f"clip.{ext}").exists(), f"Missing clip.{ext}"
+
+
+def test_json_schema_version(cfg_with_output, sample_data):
+    cfg, out_dir = cfg_with_output
+    out_dir.mkdir(parents=True, exist_ok=True)
+    segments, info = sample_data
+    write_outputs(cfg, out_dir, "clip", segments, info)
+    data = json.loads((out_dir / "clip.json").read_text())
+    assert data["schema_version"] == 1
+    assert isinstance(data["schema_version"], int)
