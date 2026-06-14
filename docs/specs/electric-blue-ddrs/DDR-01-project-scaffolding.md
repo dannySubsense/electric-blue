@@ -1,6 +1,6 @@
 # DDR-01 — Project Scaffolding
 
-- **Status:** PROPOSED (awaiting Danny approval)
+- **Status:** ACCEPTED — shipped via PR #2, merged to `main` @ `8e9c2a8` (2026-06-14)
 - **Author:** reed
 - **Date:** 2026-06-14
 - **Sprint (on approval):** `project-scaffolding`
