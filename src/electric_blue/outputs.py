@@ -23,13 +23,16 @@ def write_outputs(
     stem: str,
     segments: list[Segment],
     info: TranscriptInfo,
-) -> None:
+) -> dict[str, Path]:
     """Write all enabled output formats to *out_dir*."""
+    result: dict[str, Path] = {}
     seg_dicts = [s.to_dict() for s in segments]
     full = " ".join(s.text for s in segments).strip()
 
     if "txt" in cfg.output_formats:
-        (out_dir / f"{stem}.txt").write_text(full + "\n", encoding="utf-8")
+        p = out_dir / f"{stem}.txt"
+        p.write_text(full + "\n", encoding="utf-8")
+        result["txt"] = p
 
     if "srt" in cfg.output_formats:
         lines = []
@@ -40,16 +43,22 @@ def write_outputs(
                 s.text,
                 "",
             ]
-        (out_dir / f"{stem}.srt").write_text("\n".join(lines), encoding="utf-8")
+        p = out_dir / f"{stem}.srt"
+        p.write_text("\n".join(lines), encoding="utf-8")
+        result["srt"] = p
 
     if "vtt" in cfg.output_formats:
         lines = ["WEBVTT", ""]
         for s in segments:
             lines += [f"{fmt_ts(s.start, '.')} --> {fmt_ts(s.end, '.')}", s.text, ""]
-        (out_dir / f"{stem}.vtt").write_text("\n".join(lines), encoding="utf-8")
+        p = out_dir / f"{stem}.vtt"
+        p.write_text("\n".join(lines), encoding="utf-8")
+        result["vtt"] = p
 
     if "json" in cfg.output_formats:
         payload = {"schema_version": 1, **info.to_dict(), "text": full, "segments": seg_dicts}
-        (out_dir / f"{stem}.json").write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        p = out_dir / f"{stem}.json"
+        p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        result["json"] = p
+
+    return result

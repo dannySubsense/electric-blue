@@ -5,11 +5,17 @@ from __future__ import annotations
 import logging
 import shutil
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .backends import transcribe
 from .config import Config
-from .notify import notify
+from .notify import (
+    build_done_payload,
+    build_failed_payload,
+    build_started_payload,
+    notify,
+)
 from .outputs import write_outputs
 
 log = logging.getLogger("electric_blue")
@@ -29,36 +35,33 @@ def is_stable(path: Path, stability_seconds: float = 2.0) -> bool:
         return False
 
 
-def process(cfg: Config, src: Path) -> None:
+def process(cfg: Config, src: Path, started_at: datetime) -> None:
     log.info("Processing (%s): %s", cfg.backend, src.name)
-    t0 = time.time()
+    notify(cfg, build_started_payload(cfg, src, started_at))
     segments, info = transcribe(cfg, src)
-    write_outputs(cfg, cfg.output_dir, src.stem, segments, info)
+    output_stems = write_outputs(cfg, cfg.output_dir, src.stem, segments, info)
+    finished_at = datetime.now(timezone.utc)
     log.info(
         "Done: %s  [%s, %.0fs audio, %.0fs wall] -> %s",
         src.name,
         info.language,
         info.duration,
-        time.time() - t0,
+        (finished_at - started_at).total_seconds(),
         cfg.output_dir,
     )
-    mins = round(info.duration / 60, 1)
-    notify(
-        cfg,
-        f"{src.name} -> done ({mins} min, {info.backend})",
-        {"file": src.name, "status": "done", "duration_min": mins, "backend": info.backend},
-    )
+    notify(cfg, build_done_payload(cfg, src, info, output_stems, started_at, finished_at))
 
 
 def handle(cfg: Config, path: Path) -> None:
     if path.suffix.lower() not in cfg.media_exts or not is_stable(path, cfg.stability_seconds):
         return
+    started_at = datetime.now(timezone.utc)
     try:
-        process(cfg, path)
+        process(cfg, path, started_at)
         shutil.move(str(path), str(cfg.done_dir / path.name))
     except Exception as e:
         log.error("Failed on %s: %s", path.name, e)
-        notify(cfg, f"{path.name} -> FAILED: {e}", {"file": path.name, "status": "failed"})
+        notify(cfg, build_failed_payload(cfg, path, e, started_at, datetime.now(timezone.utc)))
         shutil.move(str(path), str(cfg.failed_dir / path.name))
 
 
