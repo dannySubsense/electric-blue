@@ -112,7 +112,15 @@ All settings are env vars — no config file needed.
 | `WHISPER_API_MODEL` | `whisper-large-v3-turbo` | Model name for the endpoint |
 | `WHISPER_API_KEY` | _(none — required)_ | API key |
 | **notifications** | | |
-| `NOTIFY_WEBHOOK` | _(off)_ | POST JSON status pings here (Slack/Teams/ntfy/etc.) |
+| `NOTIFY_WEBHOOK` | _(off)_ | POST a structured JSON event (`started`/`done`/`failed`) here; empty = disabled |
+| `NOTIFY_FORMAT` | `generic` | `generic` (raw v1 payload) or `ntfy` (ntfy.sh envelope) |
+| `NOTIFY_TIMEOUT_SEC` | `5.0` | Per-request timeout for the webhook POST (bounded, non-blocking) |
+| `NOTIFY_RETRIES` | `0` | Extra attempts on network error / HTTP 5xx (4xx is never retried) |
+| `NOTIFY_HMAC_SECRET` | _(off)_ | If set, signs the body with an `X-Electric-Blue-Signature: sha256=…` header |
+
+The webhook is strictly optional and never blocks or fails the pipeline. The payload carries
+`schema_version`, `event`, `file` (name only), `backend`, `started_at`/`finished_at` (UTC ISO-8601),
+`wall_sec`, and per-event fields — never absolute paths or secrets.
 
 ---
 

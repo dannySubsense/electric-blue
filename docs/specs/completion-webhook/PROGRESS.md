@@ -1,6 +1,6 @@
 # Progress: completion-webhook
 
-## Status: IN_PROGRESS
+## Status: COMPLETE — all 6 slices, Frank BUILD gate SHIP
 
 Sprint: completion-webhook (DDR-04 / issue #10). Branch `sprint/completion-webhook` (off main @ 870d00e).
 Spec on main (PR #11). Run gate via `PATH="$PWD/.venv/bin:$PATH" make gate` (INV-14 editable venv).
@@ -11,10 +11,10 @@ Spec on main (PR #11). Run gate via `PATH="$PWD/.venv/bin:$PATH" make gate` (INV
 - [x] S3 — Payload builders + redaction tests — COMPLETE
 - [x] S4 — write_outputs() -> dict[str,Path] — COMPLETE
 - [x] S5 — notify() rewrite + watcher integration — COMPLETE (QC PASS; INV-1+never-raises hold)
-- [ ] S6 — full gate + smoke + Frank build gate — PENDING
+- [x] S6 — full gate + smoke + Frank build gate — COMPLETE (gate 82, smoke 1, Frank SHIP)
 
 ## Current
-Slice: S6
+Slice: DONE — ready for PR
 Step: full gate + smoke + Frank build gate
 
 ## Behavior-preservation note (INV-3)
