@@ -10,12 +10,12 @@ Spec on main (PR #11). Run gate via `PATH="$PWD/.venv/bin:$PATH" make gate` (INV
 - [x] S2 — Config additions (4 fields + from_env + test_config) — COMPLETE
 - [x] S3 — Payload builders + redaction tests — COMPLETE
 - [x] S4 — write_outputs() -> dict[str,Path] — COMPLETE
-- [ ] S5 — notify() rewrite + watcher integration (19 new tests; CHAR-3/4 superseded) — PENDING
+- [x] S5 — notify() rewrite + watcher integration — COMPLETE (QC PASS; INV-1+never-raises hold)
 - [ ] S6 — full gate + smoke + Frank build gate — PENDING
 
 ## Current
-Slice: S5
-Step: @code-executor (notify rewrite + watcher) + @test-writer (19 tests)
+Slice: S6
+Step: full gate + smoke + Frank build gate
 
 ## Behavior-preservation note (INV-3)
 notify() is an OWNED API rewrite (signature changes) — NOT behavior-preserving. Only never-raises and
