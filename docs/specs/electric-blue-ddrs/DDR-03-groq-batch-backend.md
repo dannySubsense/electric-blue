@@ -1,8 +1,8 @@
 # DDR-03 — Groq Batch Async Backend
 
-- **Status:** PROPOSED
+- **Status:** ACCEPTED (2026-06-16 — Danny ratified provider + staging + D-decisions; see "Sprint Decisions" below)
 - **Author:** reed
-- **Date:** 2026-06-14
+- **Date:** 2026-06-14 (accepted 2026-06-16)
 - **Sprint (on approval):** `groq-batch-backend`
 - **Depends on:** DDR-02 (sync backend seam, registry, `Capabilities`, `schema_version`) — ACCEPTED
 - **Blocks:** DDR-04 (completion webhook)
@@ -15,6 +15,62 @@
 > D6 fails, the async seam is never built. Build order is `02 → 04 → 03`: DDR-04 lands first on
 > DDR-02's sync seam, so this DDR adapts its completion-hook call site to DDR-04's contract
 > (see C1–C3).
+
+---
+
+## Sprint Decisions — LOCKED 2026-06-16 (Danny)
+
+These ratifications make this DDR ACCEPTED and supersede the "Lean" notes in the Open
+Questions where they conflict. Grounded in a verified externals pass (June 2026, sourced).
+
+### Provider & input method
+- **Provider: Groq Batch API** (`/v1/batches`, JSONL submit → poll → retrieve). Chosen for
+  no-training default (Groq DPA) and lowest per-hour cost. Deepgram/AssemblyAI were evaluated
+  and set aside (Deepgram is callback-only with no poll endpoint → fights the cold-start drain;
+  both cost ~7–10× more, though cost is noise at homelab volume).
+- **Input is PUBLIC-URL ONLY — confirmed.** The Groq Batch `file`/file-id field is *not
+  supported*; each JSONL line carries `body.url = "https://…"`. **This corrects §3a–3d below**,
+  which describe an obsolete file-upload/file-id flow. The audio-file upload step (3a) and the
+  `body.file = "<audio_file_id>"` reference (3b) are REMOVED; replaced by the staging step
+  below. The JSONL-file upload (3c) and batch-create (3d) steps remain valid.
+
+### URL staging (the "central design question" — RESOLVED)
+- **Stage local audio → Tailscale Funnel public HTTPS URL.** Serve the staged MP3 from the
+  always-on R630 via Funnel; put that URL in the JSONL line. No second cloud account (reuses
+  Tailscale), $0. One-time enablement (tailnet HTTPS certs + `funnel` ACL attribute).
+- **Staging MUST be behind an abstraction** (e.g. `UrlStager` protocol: `stage(path) -> url`,
+  `unstage(url)`), with `FunnelStager` as the first implementation. **We can move to a minted /
+  pre-signed object-storage URL (Cloudflare R2 / Backblaze B2) later as a drop-in second
+  implementation** — that future swap must not require rearchitecting the backend or drain.
+  This is a hard architectural requirement, not a nice-to-have. (Danny, 2026-06-16.)
+- **`completion_window` defaults to 24h** (the documented minimum), bounding how long the Funnel
+  URL must stay reachable. Failure mode if the R630 reboots mid-window before Groq fetches: job
+  → `failed_dir`, operator re-drop (matches D5). Configurable via a new Config field.
+- **VERIFY (carried into the sprint, LOW-confidence in docs):** exactly when Groq fetches the
+  input URL within the window. If it fetches early, the uptime risk shrinks; design for
+  worst-case (URL live for the full 24h).
+
+### Ratified D-decisions
+- **D1 = sidecar JSON files** (`batch_store/<job_id>.json`); zero new deps, human-inspectable.
+- **D2 = CLI `--drain-batch` + cron** (e.g. every 30 min).
+- **D3 = separate top-level dir** via `TRANSCRIBE_BATCH` (decoupled from `input_dir`).
+- **D4 = one audio file per batch object** (flat state-store; aggregation is a future optimization).
+- **D5 = fail → `failed_dir`, operator re-drop** (fail-loud, consistent with sync path).
+- **D10 = `GROQ_BATCH_API_KEY` → `WHISPER_API_KEY` fallback.**
+
+### Verified facts to honor (June 2026 externals pass)
+- **Account: Groq Batch requires a paid Developer tier** (credit card); it is NOT on the free
+  tier. **No Groq account/key currently exists** — provisioning it is a prerequisite for the
+  live smoke, not for the hermetic build. (Confirmed by ground-truth check: no key in env/repo.)
+- Models: `whisper-large-v3` / `whisper-large-v3-turbo`. Pricing ~$0.111 / ~$0.04 per hour sync;
+  batch advertised **50% off** — *provenance is shaky* (was a promo through Apr 2025; current docs
+  say 50%). Treat the discount as VERIFY-at-signup, not load-bearing.
+- Limits: JSONL ≤ 50,000 lines / ≤ 200 MB; completion window 24h–7d. Per-audio-file size cap in
+  batch context is UNCONFIRMED → keep `batch_max_mb` guard (D8 placeholder 25 MB, overridable).
+- Retention: Groq stores input/intermediate/output up to **30 days**; immediate post-fetch
+  deletion is available (informs §3g cleanup). No-training per DPA.
+- Output JSONL line schema and per-line error semantics (D7) remain VERIFY against live docs
+  during the sprint before the live smoke.
 
 ---
 
