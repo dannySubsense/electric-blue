@@ -129,6 +129,28 @@ here.
 
 ---
 
+## Fast-path — docs-only changes
+The full P0..P9 loop exists to de-risk **code**. A **docs-only** change (`*.md`, comments, no `src/`
+or test logic touched) carries none of that risk, so it skips the sprint machinery: **no GitHub
+issue, no Frank gate, no smoke attestation, no slices.** What it keeps is the one load-bearing piece:
+
+```
+branch ─► PR ─► orchestrator self-merge
+```
+
+- The PR is **not a review gate** — it is the **audit record** that satisfies **INV-6** (never push
+  to `main` directly). The orchestrator may self-merge immediately; it does **not** park the PR for
+  human review when the change is already-agreed or self-evident docs.
+- Still required: **P7 secret-scan** over the diff (a docs file can still leak an IP/key/DSN), and the
+  P5 `lint-test` CI job (it runs on every PR regardless — docs changes pass it trivially).
+- **Escalate to the full loop** if the "docs" change actually encodes a decision not yet made (that's
+  a DDR/spec question, not a docs edit) or touches anything executable.
+
+This codifies the judgment call from 2026-06-16: the PR loop is discipline worth keeping; *waiting on
+review for a settled docs change* is the ceremony to drop.
+
+---
+
 ## Roles *(mechanics; the integrity core is INV-12)*
 
 | Role | Does | Does NOT |
