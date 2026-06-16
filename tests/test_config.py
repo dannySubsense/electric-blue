@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import os
+from pathlib import Path
 
 import pytest
 
@@ -149,3 +151,87 @@ def test_notify_new_fields_frozen(monkeypatch):
     cfg = Config.from_env()
     with pytest.raises((AttributeError, TypeError)):
         cfg.notify_timeout_sec = 99.0  # type: ignore[misc]
+
+
+# ── S2 batch-config tests (CFG-1..9) ──────────────────────────────────────
+
+
+def test_batch_defaults(monkeypatch, tmp_path):
+    """CFG-1: no batch env vars → all 8 batch fields take their documented defaults.
+
+    base_dir is derived the same way config.py does: Path.home() / "transcribe" when
+    TRANSCRIBE_BASE is unset.  Setting HOME=tmp_path makes that predictable.
+    """
+    for key in list(os.environ):
+        if key.startswith(("TRANSCRIBE_", "WHISPER_", "NOTIFY_", "FFMPEG_", "GROQ_BATCH_")):
+            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    cfg = Config.from_env()
+    base = tmp_path / "transcribe"
+
+    assert cfg.batch_inbox_dir is None
+    assert cfg.batch_submitted_dir == base / "batch_submitted"
+    assert cfg.batch_store_path == base / "batch_store"
+    assert cfg.batch_api_key == ""
+    assert cfg.batch_max_mb == 25
+    assert cfg.batch_completion_window == "24h"
+    assert cfg.batch_stage_dir == base / "batch_stage"
+    assert cfg.batch_funnel_base_url == ""
+
+
+def test_batch_inbox_dir_from_env(monkeypatch):
+    """CFG-2: TRANSCRIBE_BATCH sets batch_inbox_dir to the given path."""
+    monkeypatch.setenv("TRANSCRIBE_BATCH", "/tmp/bi")
+    cfg = Config.from_env()
+    assert cfg.batch_inbox_dir == Path("/tmp/bi")
+
+
+def test_batch_api_key_prefers_groq_batch_key(monkeypatch):
+    """CFG-3: GROQ_BATCH_API_KEY takes precedence over WHISPER_API_KEY (D10)."""
+    monkeypatch.setenv("GROQ_BATCH_API_KEY", "gk-abc")
+    monkeypatch.setenv("WHISPER_API_KEY", "sk-xyz")
+    cfg = Config.from_env()
+    assert cfg.batch_api_key == "gk-abc"
+
+
+def test_batch_api_key_falls_back_to_whisper_api_key(monkeypatch):
+    """CFG-4: when GROQ_BATCH_API_KEY is absent, batch_api_key uses WHISPER_API_KEY (D10 fallback)."""
+    monkeypatch.delenv("GROQ_BATCH_API_KEY", raising=False)
+    monkeypatch.setenv("WHISPER_API_KEY", "sk-xyz")
+    cfg = Config.from_env()
+    assert cfg.batch_api_key == "sk-xyz"
+
+
+def test_batch_max_mb_parsed_as_int(monkeypatch):
+    """CFG-5: TRANSCRIBE_BATCH_MAX_MB is coerced to int."""
+    monkeypatch.setenv("TRANSCRIBE_BATCH_MAX_MB", "50")
+    cfg = Config.from_env()
+    assert cfg.batch_max_mb == 50
+    assert isinstance(cfg.batch_max_mb, int) is True
+
+
+def test_batch_completion_window_env(monkeypatch):
+    """CFG-6: TRANSCRIBE_BATCH_COMPLETION_WINDOW overrides the "24h" default."""
+    monkeypatch.setenv("TRANSCRIBE_BATCH_COMPLETION_WINDOW", "7d")
+    cfg = Config.from_env()
+    assert cfg.batch_completion_window == "7d"
+
+
+def test_batch_fields_frozen(monkeypatch):
+    """CFG-8: assigning to any batch field after construction raises (frozen dataclass)."""
+    cfg = Config.from_env()
+    with pytest.raises((AttributeError, TypeError)):
+        cfg.batch_inbox_dir = None  # type: ignore[misc]
+
+
+def test_batch_api_key_not_logged(monkeypatch, caplog):
+    """CFG-9: cfg.batch_api_key value never appears in any log output (INV-7).
+
+    Asserted across Config.from_env() — the construction path that reads the key.
+    Cross-path verification through backend HTTP headers is the responsibility of S5/S6.
+    """
+    monkeypatch.setenv("GROQ_BATCH_API_KEY", "gk-secret")
+    with caplog.at_level(logging.DEBUG):
+        Config.from_env()
+    assert "gk-secret" not in caplog.text

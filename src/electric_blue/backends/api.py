@@ -20,6 +20,7 @@ class ApiBackend:
         max_upload_mb=24,  # SI megabytes (1e6 bytes); matches cfg.api_max_mb default
         needs_network=True,
         needs_gpu_recommended=False,
+        is_async=False,
     )
 
     def transcribe(self, cfg: Config, src: Path) -> Transcript:

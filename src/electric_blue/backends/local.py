@@ -43,6 +43,7 @@ class LocalBackend:
         max_upload_mb=None,
         needs_network=False,
         needs_gpu_recommended=True,
+        is_async=False,
     )
 
     def transcribe(self, cfg: Config, src: Path) -> Transcript:
