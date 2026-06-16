@@ -64,7 +64,10 @@ def handle_batch(
     4. construct backend INSIDE try (B1 defense-in-depth); backend.submit()
     5. store.save(record) BEFORE shutil.move (INV-1); staged_path = DESTINATION (SUBMIT-8)
     6. shutil.move(path → batch_submitted_dir)
-    On any exception in steps 4–6: log error, shutil.move(path → failed_dir), no store write.
+    PRE-save failure (steps 4–5 raise, SUBMIT-5): log error + move source → failed_dir; no record.
+    POST-save failure (step 6 raises, SUBMIT-6): log error; leave source in batch_inbox_dir as
+    recovery artifact; record is persisted (status=submitted); drain path retrieves transcript
+    via record; live-record guard prevents re-submission.
     """
     # 1. Suffix check (SUBMIT-7)
     if path.suffix.lower() not in cfg.media_exts:
@@ -83,6 +86,7 @@ def handle_batch(
         )
         return
     # 4–6. Submit inside try block
+    saved = False
     try:
         _backend = backend or make_groq_batch_backend(cfg)  # B1 defense-in-depth
         job_ref = _backend.submit(cfg, path)
@@ -99,10 +103,26 @@ def handle_batch(
             error=None,
         )
         store.save(record)  # INV-1: BEFORE shutil.move
+        saved = True
         shutil.move(str(path), str(cfg.batch_submitted_dir / path.name))
     except Exception as e:
-        log.error("Batch submission failed for %s: %s", path.name, e)
-        shutil.move(str(path), str(cfg.failed_dir / path.name))
+        if not saved:
+            # PRE-save failure (SUBMIT-5): backend construction or submit raised; no record
+            # persisted — move source to failed_dir so operator can re-drop after fixing.
+            log.error("Batch submission failed for %s: %s", path.name, e)
+            shutil.move(str(path), str(cfg.failed_dir / path.name))
+        else:
+            # POST-save failure (SUBMIT-6): store.save() succeeded but shutil.move raised;
+            # record is persisted (status=submitted). Do NOT move source to failed_dir —
+            # leave it in batch_inbox_dir as the recovery artifact. The drain path will
+            # retrieve the transcript via the persisted record; the live-record guard
+            # (step 3) prevents re-submission on the next scan.
+            log.error(
+                "Batch record persisted (status=submitted) but file move failed for %s: %s"
+                " — source remains in inbox for drain recovery.",
+                path.name,
+                e,
+            )
 
 
 class _BatchHandler(FileSystemEventHandler):

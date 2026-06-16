@@ -243,8 +243,11 @@ def test_submit_5_submit_raises_moves_to_failed(tmp_path, monkeypatch):
 
 
 def test_submit_6_move_raises_record_persists_guard_works(tmp_path, monkeypatch):
-    """SUBMIT-6: shutil.move raises after store.save → record exists with staged_path==DESTINATION;
-    second handle_batch call detects live record and skips re-submission."""
+    """SUBMIT-6: store.save ok; first shutil.move (inbox→batch_submitted) raises OSError →
+    (1) record persisted with status=submitted and staged_path==DESTINATION;
+    (2) source file stays in batch_inbox_dir (real filesystem assertion);
+    (3) source NOT in failed_dir (POST-save path never moves to failed_dir);
+    (4) second handle_batch detects live submitted record and skips re-submission."""
     cfg = _make_cfg(tmp_path)
     monkeypatch.setattr("electric_blue.watcher.is_stable", lambda path, s=None: True)
 
@@ -256,30 +259,41 @@ def test_submit_6_move_raises_record_persists_guard_works(tmp_path, monkeypatch)
     mock_backend = Mock()
     mock_backend.submit.return_value = _job_ref()
 
-    move_calls: list[tuple[str, str]] = []
+    # Wrap shutil.move so the FIRST call (inbox→batch_submitted) raises OSError;
+    # any subsequent calls use the real move. The POST-save exception handler does NOT
+    # call shutil.move again, so the source stays in batch_inbox_dir untouched.
+    real_move = shutil.move
+    call_count: dict[str, int] = {"n": 0}
 
-    def _mock_move(src: str, dst: str) -> None:
-        move_calls.append((src, dst))
-        if len(move_calls) == 1:
-            raise OSError("disk full")
+    def _failing_first_move(src: str, dst: str) -> object:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise OSError("disk full — simulated POST-save move failure")
+        return real_move(src, dst)
 
-    monkeypatch.setattr(shutil, "move", _mock_move)
+    monkeypatch.setattr(shutil, "move", _failing_first_move)
 
     src = cfg.batch_inbox_dir / "clip.mp4"
     src.write_bytes(b"fake media data")
 
     handle_batch(cfg, src, backend=mock_backend, store=mock_store)
 
-    # Record saved with DESTINATION staged_path before move was attempted
+    # (1) store.save WAS called; record has status=submitted and staged_path==DESTINATION
     assert len(saved) == 1
     assert saved[0].status == "submitted"
     assert saved[0].staged_path == str(cfg.batch_submitted_dir / "clip.mp4")
 
-    # Second call: live-record guard detects submitted record → skip re-submission
+    # (2) Source file STILL EXISTS at batch_inbox_dir (move to batch_submitted raised)
+    assert src.exists(), "source must remain in batch_inbox_dir after POST-save move failure"
+
+    # (3) Source is NOT in failed_dir (POST-save path leaves file in inbox, not failed_dir)
+    assert not (
+        cfg.failed_dir / "clip.mp4"
+    ).exists(), "file must NOT be in failed_dir on POST-save failure"
+
+    # (4) Second call: live-record guard detects submitted record → skip re-submission
     mock_store.find_by_src_name.return_value = saved[0]
-
     handle_batch(cfg, src, backend=mock_backend, store=mock_store)
-
     assert mock_backend.submit.call_count == 1  # not called a second time
 
 

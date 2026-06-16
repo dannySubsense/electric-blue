@@ -750,9 +750,14 @@ before `shutil.move` executes. If the move fails, `staged_path` points to the in
 location and the file remains at `batch_inbox_dir/name`. Recovery is operator-driven:
 delete the sidecar file and re-drop the source file.
 
-Crash between save and move: record exists with `status="submitted"`, source file still in
-`batch_inbox_dir`. On next watcher event, `find_by_src_name()` returns the live record and
-blocks re-submission. Drain will log an error for the `staged_path` missing. No data loss.
+Crash between save and move — and `shutil.move()` raising an exception (SUBMIT-6): in both
+cases, the record exists with `status="submitted"` and the source file remains in
+`batch_inbox_dir`. The `except` block in `handle_batch()` uses a `saved` flag (set to `True`
+immediately after `_store.save()` completes) to distinguish this post-save failure from a
+pre-save failure: when `saved is True`, the source file is NOT moved to `failed_dir`
+(SUBMIT-5 applies only when `saved is False`). On the next watcher event,
+`find_by_src_name()` returns the live record and the live-record guard skips re-submission.
+Drain retrieves the job via the persisted record. No data loss (SUBMIT-6).
 
 ### Accepted partial state — submit() → store.save() window (M11)
 
@@ -1017,6 +1022,8 @@ def handle_batch(
         )
         return
 
+    saved = False  # True once store.save() completes; distinguishes PRE- vs POST-save failure
+
     try:
         # B1 defense-in-depth: construct inside try so any RuntimeError from
         # make_groq_batch_backend / make_stager routes the file to failed_dir.
@@ -1044,15 +1051,32 @@ def handle_batch(
             error=None,
         )
         _store.save(record)
+        saved = True  # SUBMIT-6: post-save path; see except below
 
         # SUBMIT-1(5): move source file to batch_submitted_dir
         shutil.move(str(path), record.staged_path)
         log.info("Batch submitted: %s → job_id=%s", path.name, job_ref.job_id)
 
     except Exception as e:
-        # SUBMIT-5: no store write; move to failed_dir
         log.error("Batch submit failed for %s: %s", path.name, e)
-        shutil.move(str(path), str(cfg.failed_dir / path.name))
+        if not saved:
+            # SUBMIT-5: pre-save failure (backend construction / submit() raised; no
+            # record persisted). Route source file to failed_dir.
+            shutil.move(str(path), str(cfg.failed_dir / path.name))
+        else:
+            # SUBMIT-6: post-save failure (store.save() succeeded; shutil.move raised).
+            # The job was legitimately submitted and the record is persisted with
+            # status="submitted". Source file REMAINS in batch_inbox_dir — do NOT move
+            # to failed_dir. On the next watcher event the live-record guard detects the
+            # status="submitted" record and skips re-submission. Drain retrieves the job
+            # via the persisted record. Recovery is operator-driven: delete the sidecar
+            # and re-drop the source file (§7).
+            log.warning(
+                "Batch: record persisted for job %s but move to batch_submitted_dir "
+                "failed; source remains in batch_inbox_dir; delete sidecar and re-drop "
+                "to retry",
+                record.job_id,
+            )
 ```
 
 ---

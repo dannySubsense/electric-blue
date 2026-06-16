@@ -667,7 +667,7 @@ def test_hook1_notify_called_with_correct_payload(
     assert payload["file"] == record.src_name
     assert payload["job_id"] == record.job_id
     assert payload["backend"] == transcript.info.backend
-    assert "status" in payload
+    assert payload["status"] == "batch_done"
 
     # notify_webhook="" → requests.post never called
     mock_post.assert_not_called()
