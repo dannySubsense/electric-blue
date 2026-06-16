@@ -1,6 +1,6 @@
 # Progress: groq-batch
 
-## Status: COMPLETE (Frank BUILD gate SHIP) — awaiting human merge
+## Status: MERGED — #17 squash-merged to main @ a2d7a05 (CODE-MERGED, NOT live; live needs deploy + Groq paid tier + Tailscale Funnel)
 
 ## Branch: sprint/groq-batch (off main @ f96c6b3)
 Baseline: 82 tests. Now: 162 passed, 1 deselected.
