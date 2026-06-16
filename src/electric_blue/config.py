@@ -48,6 +48,16 @@ class Config:
     stability_seconds: float
     poll_interval: float
 
+    # Batch fields (S2 — groq-batch sprint)
+    batch_inbox_dir: Path | None  # TRANSCRIBE_BATCH; None = batch disabled
+    batch_submitted_dir: Path  # TRANSCRIBE_BATCH_SUBMITTED; default <base>/batch_submitted
+    batch_store_path: Path  # TRANSCRIBE_BATCH_STORE; default <base>/batch_store
+    batch_api_key: str  # GROQ_BATCH_API_KEY then WHISPER_API_KEY fallback (D10)
+    batch_max_mb: int  # TRANSCRIBE_BATCH_MAX_MB; default 25
+    batch_completion_window: str  # TRANSCRIBE_BATCH_COMPLETION_WINDOW; default "24h"
+    batch_stage_dir: Path  # TRANSCRIBE_BATCH_STAGE_DIR; default <base>/batch_stage
+    batch_funnel_base_url: str  # TRANSCRIBE_BATCH_FUNNEL_URL; default ""
+
     @classmethod
     def from_env(cls) -> Config:
         base_dir = Path(os.environ.get("TRANSCRIBE_BASE", Path.home() / "transcribe"))
@@ -103,4 +113,22 @@ class Config:
             api_bitrate="64k",
             stability_seconds=2.0,
             poll_interval=1.0,
+            batch_inbox_dir=(
+                Path(os.environ["TRANSCRIBE_BATCH"]) if os.environ.get("TRANSCRIBE_BATCH") else None
+            ),
+            batch_submitted_dir=Path(
+                os.environ.get("TRANSCRIBE_BATCH_SUBMITTED", base_dir / "batch_submitted")
+            ),
+            batch_store_path=Path(
+                os.environ.get("TRANSCRIBE_BATCH_STORE", base_dir / "batch_store")
+            ),
+            batch_api_key=(
+                os.environ.get("GROQ_BATCH_API_KEY") or os.environ.get("WHISPER_API_KEY", "")
+            ),
+            batch_max_mb=int(os.environ.get("TRANSCRIBE_BATCH_MAX_MB", "25")),
+            batch_completion_window=os.environ.get("TRANSCRIBE_BATCH_COMPLETION_WINDOW", "24h"),
+            batch_stage_dir=Path(
+                os.environ.get("TRANSCRIBE_BATCH_STAGE_DIR", base_dir / "batch_stage")
+            ),
+            batch_funnel_base_url=os.environ.get("TRANSCRIBE_BATCH_FUNNEL_URL", ""),
         )

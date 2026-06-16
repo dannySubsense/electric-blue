@@ -22,7 +22,7 @@ class Capabilities:
     max_upload_mb: int | None  # None = no cap (local); 24 = SI megabytes (api)
     needs_network: bool
     needs_gpu_recommended: bool
-    # is_async intentionally absent — deferred to DDR-03 with AsyncBackend
+    is_async: bool = False  # A5 OWNED ADDITION — False for local/api; True for GroqBatchBackend
 
 
 @dataclass
