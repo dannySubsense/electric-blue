@@ -14,7 +14,7 @@ Authored 2026-06-14 (Reed), judgment-gated by Frank.
 ## The full loop (one sprint)
 
 ```
-P0 DDR ACCEPTED ─► P1 GitHub issue ─► P2 /spec-start ──[Frank SPEC gate]──►
+P0 DDR ACCEPTED ─► P1 GitHub issue ─► P2 /spec-start ──[Frank SPEC gate]──► spec PR ─► merge to main ─►
 P3 /forge-start (per-slice build loop) ─► P5 FULL GATE ─► P6 SMOKE GATE ─►
 P7 SECRET-SCAN / push-prep ──[Frank BUILD gate]──► P9 PR ─► merge
                                           ▲
@@ -42,6 +42,12 @@ is a user-facing surface — omit for internal/library work). spec-reviewer driv
 internally-consistent, zero-gap.
 - **Gate: Frank SPEC gate → SHIP required to proceed.** Criteria: DDR fidelity, behavior-preservation
   chain airtight, every AC has an architecture home and a verifying slice, no load-bearing gaps.
+- **Spec lands on `main` FIRST.** Once the Frank SPEC gate is SHIP, the spec docs merge to `main` via
+  their **own PR** — *before* `/forge-start` begins. The spec is then visible under
+  `docs/specs/<sprint>/` on `main` throughout the build, and the build branch **references** it rather
+  than carrying it. Burying the spec inside the build branch (as backend-seam did) is the anti-pattern;
+  DDR-04 did it right (spec PR #11, then build PR #12).
+- **Gate (P2→P3 transition):** the spec set is merged to `main` before any build branch is cut.
 
 ## P3 — `/forge-start` → per-slice build loop
 Repeat for each slice in `04-ROADMAP`:
