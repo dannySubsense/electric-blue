@@ -23,16 +23,16 @@ suggestion. This doubles the wall as a compliance ledger — when a TARGET flips
 | Invariant | Status | Note |
 |-----------|--------|------|
 | INV-1 No data loss / no orphaned input | **MET** | `watcher.handle()` move-ordering is correct today |
-| INV-2 Fail loud; never silently substitute | **PARTIAL** | error-half MET; backend-substitution half violated by `else→local` → fixed by issue #4 |
+| INV-2 Fail loud; never silently substitute | **MET** | registry + `RuntimeError` on unknown backend (backend-seam, PR #6) |
 | INV-3 Behavior preserved unless owned | **MET** | active discipline (enforced per-change) |
 | INV-4 Green gate AND smoke before merge | **MET** | gate in CI; smoke by attestation (P6) |
 | INV-5 Frank SHIP precedes merge | **MET** | active gate |
 | INV-6 Branch-and-PR; never commit to `main` | **MET** | `main` advances only via PRs |
 | INV-7 Secrets never pushed / never in artifacts | **MET** | `CLAUDE.md`+`docs/homelab/` gitignored; no secret logging today |
 | INV-8 Gate hermetic; smoke the only real lane | **MET** | `smoke` marker; gate is mocked |
-| INV-9 ACCEPTED DDR decisions locked | **MET** | active rule (DDR-02 D1–D5) |
-| INV-10 `schema_version` data-independent/additive | **TARGET** | not emitted yet — backend-seam S4 |
-| INV-11 Dispatch only via Protocol + registry | **TARGET** | current dispatch is `if/else` — backend-seam S2–S3 |
+| INV-9 ACCEPTED DDR decisions locked | **MET** | active rule (DDR-02 D1–D5; DDR-03 D1–D5+D10+staging+async) |
+| INV-10 `schema_version` data-independent/additive | **MET** | `"schema_version": 1` literal first key in `outputs.py` (backend-seam S4, PR #6) |
+| INV-11 Dispatch only via Protocol + registry | **MET** | `Backend` Protocol + `_REGISTRY` + `RuntimeError` on unknown (backend-seam S2–S3, PR #6) |
 | INV-12 Authorship ≠ judgment | **MET** | active separation |
 | INV-13 Reproducible builds (ML stack pinned) | **MET** | model-ids + `faster-whisper>=1.2.0,<2.0` bounded; torch only via future `[diarize]` (whisperx-pinned) |
 | INV-14 Gate runs against working-tree `src/` | **MET** | `tests/test_install_editable.py` (gate-marked) — fails on stale/non-editable install |
@@ -54,8 +54,7 @@ processing routes the source to `failed/`. No code path deletes or unlinks an in
   finds nothing operating on an input path.
 
 ### INV-2 — Fail loud; never silently substitute
-**Status: PARTIALLY MET — error-handling half MET; backend-substitution half TARGET (backend-seam,
-issue #4).**
+**Status: MET** — registry + `RuntimeError` on unknown backend landed in backend-seam (PR #6).
 The system never substitutes a different backend, behavior, or output for the one requested.
 Misconfiguration **raises**. Unknown `cfg.backend` raises `RuntimeError` (no `else`/default
 catch-all that quietly runs a different backend). No `except` swallows a processing error: every
@@ -63,15 +62,12 @@ failure is **both logged and notified** (or re-raised).
 
 - **Why:** the generalized form of the unknown-backend silent-fallback bug caught at the DDR-02
   spec gate. Silent substitution produces confidently-wrong output that no one notices.
-- **Current state:** the error-handling half is MET — `watcher.handle()`'s `except` logs *and*
-  notifies *and* routes to `failed/`. The backend-substitution half is **VIOLATED today**:
-  `backends/__init__.py` is `if cfg.backend == "api": … else: transcribe_local`, so an unknown
-  backend (e.g. `"batch"`) **silently runs local**. The backend-seam sprint (issue #4) replaces this
-  with the registry + `RuntimeError` on unknown — that sprint is what brings dispatch into
-  compliance. This invariant exists *because* the current code breaks it.
-- **Check (enforced once issue #4 lands):** `grep -rnE 'if .*cfg\.backend ==' src/` finds no dispatch
-  branching (dispatch is the registry only — see INV-11); no `except` in `handle`/`process` both
-  fails to log *and* fails to notify/re-raise.
+- **Current state:** fully MET. `backends/__init__.py` uses `_REGISTRY` dict dispatch;
+  `get_backend()` raises `RuntimeError` with the available-backends list on unknown name — no
+  silent `else`. `watcher.handle()`'s `except` logs *and* notifies *and* routes to `failed/`.
+- **Check:** `grep -rnE 'if .*cfg\.backend ==' src/` finds no dispatch branching (dispatch is
+  registry only — see INV-11); no `except` in `handle`/`process` both fails to log *and* fails to
+  notify/re-raise.
 
 ### INV-3 — Behavior preserved unless explicitly owned
 No change alters the observable behavior of an existing code path **unless** that delta is:
@@ -183,34 +179,39 @@ No spec or forge change contradicts an ACCEPTED DDR decision. A change requires 
 DDR**, referenced in the PR.
 
 - **Check:** a PR touching a DDR-governed decision cites the superseding DDR id, or it is rejected.
-- **Currently locked:** DDR-02 D1–D5 (Protocol, internal-dict registry, no AsyncBackend this phase,
-  `schema_version:1` additive/data-independent, capability set without `is_async`).
+- **Currently locked:**
+  - **DDR-02** D1–D5: `Backend` Protocol, internal-dict registry, `AsyncBackend` deferred to DDR-03,
+    `schema_version:1` additive/data-independent, capability set without `is_async`.
+  - **DDR-03** (locked 2026-06-16): Provider = Groq Batch API; input = public URL only (no
+    file/file-id); staging via `UrlStager` protocol (`FunnelStager` first impl, swap-in contract
+    hard requirement); `completion_window` defaults 24h; D1 = sidecar JSON job store; D2 = CLI
+    `--drain-batch` + cron; D3 = separate top-level dir via `TRANSCRIBE_BATCH`; D4 = one audio
+    file per batch object; D5 = fail → `failed_dir` + operator re-drop; D10 = `GROQ_BATCH_API_KEY`
+    → `WHISPER_API_KEY` fallback; `AsyncBackend` sub-protocol (`submit`/`poll`/`fetch`); `is_async`
+    capability added.
 
 ### INV-10 — `schema_version` is data-independent and additive
-**Status: TARGET — established by backend-seam (issue #4, slice S4). No `schema_version` is emitted
-today.**
+**Status: MET** — `"schema_version": 1` landed as a literal first key in backend-seam S4 (PR #6).
 `schema_version` is an **integer literal** independent of input content, present on every JSON
 output. New fields are added **without** bumping it; the integer bumps **only** on a breaking change
 authorized by a DDR.
 
-- **Current state:** the JSON payload in `outputs.py` is `{**info.to_dict(), "text", "segments"}` —
-  no version field yet. Backend-seam S4 adds `"schema_version": 1` as a literal first key; until then
-  this Check is unrunnable.
-- **Check (once S4 lands):** the `schema_version` value is a literal first key in the `outputs.py`
-  payload (not computed from data); a test asserts its presence and `int` type; any bump diff
-  references a DDR.
+- **Current state:** `outputs.py` payload is `{"schema_version": 1, **info.to_dict(), "text": ...,
+  "segments": ...}` — literal first key, not derived from input.
+- **Check:** the `schema_version` value is a literal first key in the `outputs.py` payload (not
+  computed from data); a test asserts its presence and `int` type; any bump diff references a DDR.
 
 ### INV-11 — Backend dispatch only via Protocol + registry
-**Status: TARGET — established by backend-seam (issue #4, slices S2–S3). Current dispatch is
-`if/else`.**
+**Status: MET** — `Backend` Protocol + `_REGISTRY` dict landed in backend-seam S2–S3 (PR #6).
 Backends implement the `Backend` Protocol; dispatch is solely a registry lookup keyed by
 `cfg.backend`; no reintroduced backend-name `if/else`. Adding a backend is one `_REGISTRY` entry.
 
-- **Current state:** `backends/__init__.py` is still the `if cfg.backend == "api": … else: …`
-  dispatch; the `Backend` Protocol and `_REGISTRY` do not exist yet. Backend-seam builds them.
+- **Current state:** `backends/__init__.py` exports `get_backend(cfg)` which does a `_REGISTRY`
+  dict lookup; `Backend` Protocol defined in `backends/base.py`; `LocalBackend` and `ApiBackend`
+  (and `GroqBatchBackend` via its own registry path) conform to it.
 - **Pairs with INV-2:** the registry's unknown-key `RuntimeError` is the fail-loud enforcement.
-- **Check (once issue #4 lands):** `grep -rnE 'if .*backend ==' src/` finds no dispatch branching;
-  new backends appear as a single `_REGISTRY` entry plus a `Backend`-conformant class.
+- **Check:** `grep -rnE 'if .*backend ==' src/` finds no dispatch branching; new backends appear
+  as a single `_REGISTRY` entry plus a `Backend`-conformant class.
 
 ---
 
