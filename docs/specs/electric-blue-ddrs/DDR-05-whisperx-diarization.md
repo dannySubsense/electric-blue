@@ -1,12 +1,41 @@
 # DDR-05 — WhisperX Speaker Diarization Backend
 
-- **Status:** PROPOSED
+- **Status:** ACCEPTED — locked 2026-06-18 (Danny)
 - **Author:** reed
 - **Date:** 2026-06-14
 - **Sprint (on approval):** `whisperx-diarization`
 - **Depends on:** DDR-02 (backend seam + `Backend` Protocol, `base.py`, `Capabilities`, `schema_version`) — must be merged first
 - **Blocks:** —
 - **Supersedes:** —
+
+---
+
+## Sprint Decisions — LOCKED 2026-06-18 (Danny)
+
+All D-flags from the Open Questions section are resolved. These are locked; do not reopen.
+
+- **D1 = whisperX end-to-end** — transcribe → align → diarize → assign via the `whisperx`
+  library. Backend registered as `"diarize"`. Option B (pyannote-direct) deferred as a future
+  alternative.
+- **D2 = segment-level speaker assignment for v1** — one `speaker` label per `Segment`; word-level
+  deferred to a future DDR.
+- **D3b = omit `speaker` key when `None`** — `to_dict()` omits the key entirely when no diarization
+  was run; does not emit `"speaker": null`.
+- **D3c = no speaker prefix in TXT** — speaker labels appear in JSON/SRT/VTT only; plain TXT is
+  unchanged.
+- **D3d = majority-speaker label for mid-cue** — a subtitle cue spanning two speakers is labelled
+  with the majority speaker; cue-splitting deferred.
+- **D4 = strictly opt-in** — `[diarize]` extra required; `HF_TOKEN` env var required; README must
+  direct users to accept pyannote model ToS on HuggingFace before use. No ToS burden on the repo.
+- **D5 = CPU is the primary deployment target** — R630 (always-on Linux server, CPU-only) is the
+  production host. Batch/overnight latency is acceptable. No GPU warnings or GPU-first assumptions.
+- **D6 = auto-detect + fixed count only** — expose `WHISPER_DIARIZE_NUM_SPEAKERS` for fixed count;
+  auto-detect when unset. `min_speakers`/`max_speakers` deferred to a future DDR.
+- **D7 = pin whisperX release** — `whisperx>=3.8.6,<4.0` in `[diarize]` extra (or nearest
+  verified available release — confirm against PyPI at sprint start); torch/pyannote are
+  transitive dependencies, not re-declared.
+- **Startup validation** — `ConfigurationError` for missing `HF_TOKEN` is raised at backend
+  instantiation (service startup), not at first `transcribe()` call.
 
 ---
 
