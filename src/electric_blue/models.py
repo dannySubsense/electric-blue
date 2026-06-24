@@ -10,9 +10,13 @@ class Segment:
     start: float
     end: float
     text: str
+    speaker: str | None = None
 
     def to_dict(self) -> dict:
-        return {"start": self.start, "end": self.end, "text": self.text}
+        d = {"start": self.start, "end": self.end, "text": self.text}
+        if self.speaker is not None:
+            d["speaker"] = self.speaker
+        return d
 
 
 @dataclass

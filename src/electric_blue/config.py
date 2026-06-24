@@ -6,6 +6,29 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from .exceptions import ConfigurationError
+
+
+def _parse_diarize_num_speakers(raw: str | None) -> int | None:
+    """Parse and validate the WHISPER_DIARIZE_NUM_SPEAKERS environment variable.
+
+    Returns None when *raw* is None (auto-detect mode).
+    Raises ConfigurationError for non-integer strings or values <= 0.
+    """
+    if raw is None:
+        return None
+    try:
+        val = int(raw)
+    except ValueError:
+        raise ConfigurationError(
+            f"WHISPER_DIARIZE_NUM_SPEAKERS must be a positive integer; got {raw!r}"
+        )
+    if val <= 0:
+        raise ConfigurationError(
+            f"WHISPER_DIARIZE_NUM_SPEAKERS must be a positive integer; got {val}"
+        )
+    return val
+
 
 @dataclass(frozen=True)
 class Config:
@@ -17,7 +40,7 @@ class Config:
     failed_dir: Path
 
     # Backend selection
-    backend: str  # "local" | "api"
+    backend: str  # "local" | "api" | "diarize"
     language: str | None
 
     # Local backend
@@ -57,6 +80,10 @@ class Config:
     batch_completion_window: str  # TRANSCRIBE_BATCH_COMPLETION_WINDOW; default "24h"
     batch_stage_dir: Path  # TRANSCRIBE_BATCH_STAGE_DIR; default <base>/batch_stage
     batch_funnel_base_url: str  # TRANSCRIBE_BATCH_FUNNEL_URL; default ""
+
+    # Diarize backend
+    hf_token: str  # HF_TOKEN; required when backend="diarize"
+    diarize_num_speakers: int | None  # WHISPER_DIARIZE_NUM_SPEAKERS; None = auto-detect
 
     @classmethod
     def from_env(cls) -> Config:
@@ -131,4 +158,8 @@ class Config:
                 os.environ.get("TRANSCRIBE_BATCH_STAGE_DIR", base_dir / "batch_stage")
             ),
             batch_funnel_base_url=os.environ.get("TRANSCRIBE_BATCH_FUNNEL_URL", ""),
+            hf_token=os.environ.get("HF_TOKEN", ""),
+            diarize_num_speakers=_parse_diarize_num_speakers(
+                os.environ.get("WHISPER_DIARIZE_NUM_SPEAKERS")
+            ),
         )
