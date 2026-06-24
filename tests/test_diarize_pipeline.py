@@ -7,11 +7,13 @@ S2: characterization tests — baseline behavior of Segment.to_dict() and write_
 
 from __future__ import annotations
 
+import logging
 import os
 
 import pytest
 
 from electric_blue.config import Config
+from electric_blue.exceptions import ConfigurationError
 from electric_blue.models import Segment, TranscriptInfo
 from electric_blue.outputs import write_outputs
 
@@ -114,3 +116,57 @@ def test_segment_to_dict_includes_speaker_when_set():
     """S3: to_dict() includes 'speaker' key with correct value when speaker is set."""
     result = Segment(0.0, 1.0, "x", speaker="SPEAKER_00").to_dict()
     assert result["speaker"] == "SPEAKER_00"
+
+
+# ── S4 — Diarize fields in config.py ─────────────────────────────────────────
+
+
+def test_config_hf_token_default_empty(monkeypatch):
+    """S4: HF_TOKEN unset → cfg.hf_token == ""."""
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    cfg = Config.from_env()
+    assert cfg.hf_token == ""
+
+
+def test_config_diarize_num_speakers_default_none(monkeypatch):
+    """S4: WHISPER_DIARIZE_NUM_SPEAKERS unset → cfg.diarize_num_speakers is None."""
+    monkeypatch.delenv("WHISPER_DIARIZE_NUM_SPEAKERS", raising=False)
+    cfg = Config.from_env()
+    assert cfg.diarize_num_speakers is None
+
+
+def test_config_num_speakers_valid(monkeypatch):
+    """S4: WHISPER_DIARIZE_NUM_SPEAKERS=2 → cfg.diarize_num_speakers == 2, isinstance int."""
+    monkeypatch.setenv("WHISPER_DIARIZE_NUM_SPEAKERS", "2")
+    cfg = Config.from_env()
+    assert cfg.diarize_num_speakers == 2
+    assert isinstance(cfg.diarize_num_speakers, int)
+
+
+def test_config_invalid_num_speakers_zero(monkeypatch):
+    """S4: WHISPER_DIARIZE_NUM_SPEAKERS=0 → ConfigurationError from Config.from_env()."""
+    monkeypatch.setenv("WHISPER_DIARIZE_NUM_SPEAKERS", "0")
+    with pytest.raises(ConfigurationError):
+        Config.from_env()
+
+
+def test_config_invalid_num_speakers_negative(monkeypatch):
+    """S4: WHISPER_DIARIZE_NUM_SPEAKERS=-1 → ConfigurationError."""
+    monkeypatch.setenv("WHISPER_DIARIZE_NUM_SPEAKERS", "-1")
+    with pytest.raises(ConfigurationError):
+        Config.from_env()
+
+
+def test_config_invalid_num_speakers_string(monkeypatch):
+    """S4: WHISPER_DIARIZE_NUM_SPEAKERS=two → ConfigurationError."""
+    monkeypatch.setenv("WHISPER_DIARIZE_NUM_SPEAKERS", "two")
+    with pytest.raises(ConfigurationError):
+        Config.from_env()
+
+
+def test_config_hf_token_not_logged(monkeypatch, caplog):
+    """S4: HF_TOKEN value never appears in any log output during Config.from_env() (INV-7)."""
+    monkeypatch.setenv("HF_TOKEN", "hf-secret-xyz")
+    with caplog.at_level(logging.DEBUG):
+        Config.from_env()
+    assert "hf-secret-xyz" not in caplog.text

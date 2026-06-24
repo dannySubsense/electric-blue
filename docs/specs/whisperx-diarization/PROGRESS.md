@@ -9,7 +9,7 @@ QC gate: **Frank** (judgment gate per forge invocation; loop until SHIP). YAGNI 
 - [x] S1: `exceptions.py` (ConfigurationError) — COMPLETE (Frank SHIP)
 - [x] S2: Characterization tests (baseline lock) — COMPLETE (Frank SHIP)
 - [x] S3: `Segment.speaker` in models.py — COMPLETE (Frank SHIP)
-- [ ] S4: Diarize fields in config.py — PENDING
+- [x] S4: Diarize fields in config.py — COMPLETE (Frank SHIP)
 - [ ] S5: Speaker prefix rendering in outputs.py — PENDING
 - [ ] S6: `backends/diarize.py` (WhisperXBackend) — PENDING
 - [ ] S7: Registry entry + watcher startup validation — PENDING
@@ -18,9 +18,9 @@ QC gate: **Frank** (judgment gate per forge invocation; loop until SHIP). YAGNI 
 - [ ] S10: README documentation — PENDING
 
 ## Current
-Slice: S4
+Slice: S5
 Step: starting
-Baseline: `make gate` green — 169 passed after S3
+Baseline: `make gate` green — 176 passed after S4
 
 ## Fix Attempts
 | Test/File | Attempts | Last Error |
