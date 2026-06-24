@@ -96,3 +96,21 @@ def test_char_txt_no_speaker_prefix(char_cfg, char_segments, char_info):
     write_outputs(cfg, out_dir, "char_clip", char_segments, char_info)
     txt_content = (out_dir / "char_clip.txt").read_text(encoding="utf-8")
     assert "[SPEAKER_" not in txt_content
+
+
+# ── S3 — Segment.speaker field ────────────────────────────────────────────────
+
+
+def test_segment_to_dict_omits_speaker_when_none():
+    """S3: to_dict() has no 'speaker' key when speaker is absent or explicitly None."""
+    result_positional = Segment(0.0, 1.0, "x").to_dict()
+    assert "speaker" not in result_positional
+
+    result_kwarg = Segment(0.0, 1.0, "x", speaker=None).to_dict()
+    assert "speaker" not in result_kwarg
+
+
+def test_segment_to_dict_includes_speaker_when_set():
+    """S3: to_dict() includes 'speaker' key with correct value when speaker is set."""
+    result = Segment(0.0, 1.0, "x", speaker="SPEAKER_00").to_dict()
+    assert result["speaker"] == "SPEAKER_00"
