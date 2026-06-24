@@ -10,7 +10,7 @@ from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
 
-from .backends import transcribe
+from .backends import get_backend, transcribe
 from .backends.batch_groq import AsyncBackend, make_groq_batch_backend
 from .batch_store import BatchStore, JobRecord, make_store
 from .config import Config
@@ -194,6 +194,8 @@ def run_once(cfg: Config) -> None:
 def run_watch(cfg: Config) -> None:
     from watchdog.events import FileSystemEventHandler
     from watchdog.observers import Observer
+
+    get_backend(cfg)  # validate backend config at startup; raises ConfigurationError early
 
     class H(FileSystemEventHandler):
         def on_created(self, e):

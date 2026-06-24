@@ -529,3 +529,71 @@ def test_no_whisperx_import_before_hf_guard(monkeypatch):
         WhisperXBackend(cfg)
 
     assert "whisperx" not in sys.modules
+
+
+# ── S7 — Registry entry + watcher startup validation ─────────────────────────
+
+
+def test_registry_contains_diarize():
+    """S7: _FACTORIES has 'diarize'; _REGISTRY does not (no eager instantiation, INV-8)."""
+    from electric_blue.backends import _FACTORIES, _REGISTRY
+
+    assert "diarize" in _FACTORIES
+    assert "diarize" not in _REGISTRY
+
+
+def test_get_backend_returns_whisperx_backend(monkeypatch):
+    """S7: get_backend(cfg) returns a WhisperXBackend instance for backend='diarize' with valid token."""
+    monkeypatch.setenv("WHISPER_BACKEND", "diarize")
+    monkeypatch.setenv("HF_TOKEN", "hf-test-token")
+    monkeypatch.delenv("WHISPER_DIARIZE_NUM_SPEAKERS", raising=False)
+    cfg = Config.from_env()
+
+    from electric_blue.backends import get_backend
+    from electric_blue.backends.diarize import WhisperXBackend
+
+    result = get_backend(cfg)
+    assert isinstance(result, WhisperXBackend)
+
+
+def test_run_watch_validates_backend_at_startup(monkeypatch):
+    """S7: run_watch() raises ConfigurationError immediately when backend='diarize' and HF_TOKEN absent.
+
+    Observer is stubbed via sys.modules to a no-op so the watch loop cannot block if
+    ConfigurationError somehow fails to fire as the first statement (defensive). run_once
+    is also stubbed to prevent real filesystem iteration. Both stubs are not reached on a
+    correct S7 implementation — ConfigurationError fires at the first line of run_watch().
+    """
+    import sys
+    import types
+
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.setenv("WHISPER_BACKEND", "diarize")
+    monkeypatch.delenv("WHISPER_DIARIZE_NUM_SPEAKERS", raising=False)
+    cfg = Config.from_env()
+
+    # Stub Observer (locally imported inside run_watch) to a no-op via sys.modules
+    class _NoOpObserver:
+        def schedule(self, *a, **kw):
+            pass
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+        def join(self):
+            pass
+
+    fake_observers_mod = types.ModuleType("watchdog.observers")
+    fake_observers_mod.Observer = _NoOpObserver
+    monkeypatch.setitem(sys.modules, "watchdog.observers", fake_observers_mod)
+
+    # Stub run_once to prevent real filesystem iteration (not reached on correct impl)
+    monkeypatch.setattr("electric_blue.watcher.run_once", lambda _cfg: None)
+
+    from electric_blue.watcher import run_watch
+
+    with pytest.raises(ConfigurationError):
+        run_watch(cfg)

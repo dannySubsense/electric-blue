@@ -12,15 +12,15 @@ QC gate: **Frank** (judgment gate per forge invocation; loop until SHIP). YAGNI 
 - [x] S4: Diarize fields in config.py — COMPLETE (Frank SHIP)
 - [x] S5: Speaker prefix rendering in outputs.py — COMPLETE (Frank SHIP)
 - [x] S6: `backends/diarize.py` (WhisperXBackend) — COMPLETE (Frank SHIP)
-- [ ] S7: Registry entry + watcher startup validation — PENDING
+- [x] S7: Registry entry + watcher startup validation — COMPLETE (Frank SHIP)
 - [ ] S8: pyproject extra + marker + Makefile gate filter — PENDING
 - [ ] S9: Diarize smoke test — PENDING
 - [ ] S10: README documentation — PENDING
 
 ## Current
-Slice: S7
+Slice: S8
 Step: starting
-Baseline: `make gate` green — 192 passed after S6
+Baseline: `make gate` green — 195 passed after S7
 
 ## Fix Attempts
 | Test/File | Attempts | Last Error |
