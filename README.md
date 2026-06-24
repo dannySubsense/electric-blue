@@ -19,7 +19,6 @@ transcripts. Two interchangeable backends:
 |---------|--------------|------|-------|----------|
 | `api` | Any OpenAI-compatible endpoint (Groq, OpenAI, etc.) | API pricing | Seconds (faster than realtime) | "I want it now" |
 | `local` | faster-whisper on any server or workstation | Free / offline | Realtime-ish on CPU, fast on GPU | Batch, offline, long files |
-| `diarize` | whisperX (transcribe → align → diarize → assign) on CPU/GPU | Free / offline | Slow (CPU; multi-stage) | Speaker-labelled transcripts (who said what) |
 
 A common pattern: an always-on service watches an inbox with the **API** backend for instant
 results; a nightly cron drains a batch folder with the **local** backend for free processing.
@@ -30,14 +29,9 @@ results; a nightly cron drains a batch folder with the **local** backend for fre
 
 ## Install
 
-> **Note:** electric-blue is not yet published to PyPI. Install from source:
-
 ```bash
-git clone https://github.com/your-org/electric-blue.git
-cd electric-blue
-pip install -e .            # base install (API backend only)
-pip install -e ".[local]"   # + faster-whisper for local backend
-pip install -e ".[diarize]" # + whisperX for speaker diarization
+pip install electric-blue               # base install (api backend)
+pip install "electric-blue[local]"      # + faster-whisper for local/GPU backend
 ```
 
 **System requirement:** `ffmpeg` must be on `PATH` (or set `FFMPEG_BIN` to its path).
@@ -46,24 +40,7 @@ pip install -e ".[diarize]" # + whisperX for speaker diarization
 - macOS: `brew install ffmpeg`
 - Windows: `winget install Gyan.FFmpeg`
 
-### diarize backend
-
-The `[diarize]` extra enables speaker diarization via whisperX (four-stage pipeline: transcribe → align → diarize → assign).
-
-```bash
-pip install -e ".[diarize]"        # editable / source install
-pip install electric-blue[diarize] # once published to PyPI
-```
-
-> **Terms of Service — required before use:** Visit
-> [huggingface.co/pyannote/speaker-diarization-3.1](https://huggingface.co/pyannote/speaker-diarization-3.1)
-> and **accept the model license**. Without acceptance your `HF_TOKEN` is rejected by
-> the pyannote pipeline at runtime.
-
-**Windows (ASUS ROG or any Windows host):** `triton` — a transitive dependency via
-torch/whisperX — has no PyPI binary for Windows. You must either use **WSL2** or install
-torch separately using the appropriate [Windows wheel](https://pytorch.org/get-started/locally/)
-*before* running `pip install electric-blue[diarize]`.
+> **Diarization (speaker-labelled transcripts):** deferred to 0.2.0.
 
 ### Development setup
 
@@ -116,7 +93,7 @@ All settings are env vars — no config file needed.
 
 | Variable | Default | Notes |
 |----------|---------|-------|
-| `WHISPER_BACKEND` | `local` | `local`, `api`, or `diarize` |
+| `WHISPER_BACKEND` | `local` | `local` or `api` |
 | `TRANSCRIBE_BASE` | `~/transcribe` | Root for inbox/transcripts/done/failed |
 | `TRANSCRIBE_INPUT` | `<BASE>/inbox` | Watch/drain this folder |
 | `TRANSCRIBE_OUTPUT` | `<BASE>/transcripts` | Write transcripts here |
@@ -132,9 +109,6 @@ All settings are env vars — no config file needed.
 | `WHISPER_API_BASE` | `https://api.groq.com/openai/v1` | Any OpenAI-compatible endpoint |
 | `WHISPER_API_MODEL` | `whisper-large-v3-turbo` | Model name for the endpoint |
 | `WHISPER_API_KEY` | _(none — required)_ | API key |
-| **diarize backend** | | |
-| `HF_TOKEN` | _(none — **required**)_ | HuggingFace access token; obtain at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens). Accept the [pyannote model license](https://huggingface.co/pyannote/speaker-diarization-3.1) first. |
-| `WHISPER_DIARIZE_NUM_SPEAKERS` | _(auto-detect)_ | Fix speaker count to this integer; omit to let pyannote detect automatically |
 | **notifications** | | |
 | `NOTIFY_WEBHOOK` | _(off)_ | POST a structured JSON event (`started`/`done`/`failed`) here; empty = disabled |
 | `NOTIFY_FORMAT` | `generic` | `generic` (raw v1 payload) or `ntfy` (ntfy.sh envelope) |
