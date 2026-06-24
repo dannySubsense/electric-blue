@@ -1,6 +1,6 @@
 # Progress: whisperx-diarization (DDR-05)
 
-## Status: IN_PROGRESS
+## Status: COMPLETE (all 10 slices Frank SHIP)
 
 Branch: `sprint/whisperx-diarization` (off `main` @ e030293)
 QC gate: **Frank** (judgment gate per forge invocation; loop until SHIP). YAGNI philosophy.
@@ -15,12 +15,12 @@ QC gate: **Frank** (judgment gate per forge invocation; loop until SHIP). YAGNI 
 - [x] S7: Registry entry + watcher startup validation — COMPLETE (Frank SHIP)
 - [x] S8: pyproject extra + marker + Makefile gate filter — COMPLETE (Frank SHIP)
 - [x] S9: Diarize smoke test — COMPLETE (Frank SHIP; real run deferred to [diarize]+HF_TOKEN host)
-- [ ] S10: README documentation — PENDING
+- [x] S10: README documentation — COMPLETE (Frank SHIP)
 
 ## Current
-Slice: S10
-Step: starting
-Baseline: `make gate` green — 195 passed, 2 deselected after S9
+Slice: ALL COMPLETE
+Step: feature done — full gate green (195 passed, 2 deselected)
+Next: end-of-feature full run + PR
 
 ## Fix Attempts
 | Test/File | Attempts | Last Error |
