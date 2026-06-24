@@ -37,10 +37,11 @@ def write_outputs(
     if "srt" in cfg.output_formats:
         lines = []
         for i, s in enumerate(segments, 1):
+            cue_text = f"[{s.speaker}] {s.text}" if s.speaker is not None else s.text
             lines += [
                 str(i),
                 f"{fmt_ts(s.start, ',')} --> {fmt_ts(s.end, ',')}",
-                s.text,
+                cue_text,
                 "",
             ]
         p = out_dir / f"{stem}.srt"
@@ -50,7 +51,8 @@ def write_outputs(
     if "vtt" in cfg.output_formats:
         lines = ["WEBVTT", ""]
         for s in segments:
-            lines += [f"{fmt_ts(s.start, '.')} --> {fmt_ts(s.end, '.')}", s.text, ""]
+            cue_text = f"[{s.speaker}] {s.text}" if s.speaker is not None else s.text
+            lines += [f"{fmt_ts(s.start, '.')} --> {fmt_ts(s.end, '.')}", cue_text, ""]
         p = out_dir / f"{stem}.vtt"
         p.write_text("\n".join(lines), encoding="utf-8")
         result["vtt"] = p
