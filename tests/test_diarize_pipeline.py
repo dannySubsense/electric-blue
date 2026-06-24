@@ -280,3 +280,252 @@ def test_no_speaker_output_identical(char_cfg, char_info, tmp_path):
         assert (
             content1 == content2
         ), f"{ext} output differs between positional and speaker=None forms"
+
+
+# ── S6 — backends/diarize.py (WhisperXBackend pipeline) ──────────────────────
+
+# --- Fake helpers ---
+
+
+class FakeModel:
+    """Fake whisperX transcription model — returns two fixed segments."""
+
+    def transcribe(self, audio_array, language=None, batch_size=16):
+        return {
+            "segments": [
+                {"start": 0.0, "end": 2.5, "text": "hello", "words": []},
+                {"start": 2.5, "end": 5.0, "text": "goodbye", "words": []},
+            ],
+            "language": "en",
+        }
+
+
+class FakeAlignModel:
+    """Fake whisperX alignment model — placeholder, no logic required."""
+
+    pass
+
+
+class FakeDiarizationPipeline:
+    """Fake pyannote DiarizationPipeline.
+
+    Records kwargs on each __call__ so tests can assert num_speakers
+    was passed or withheld. Returns an opaque synthetic annotation;
+    fake_assign_word_speakers maps it to segments independently.
+    """
+
+    _calls: list = []
+
+    def __init__(self, model_name=None, token=None, device=None):
+        pass
+
+    def __call__(self, audio_array, **kwargs):
+        FakeDiarizationPipeline._calls.append(kwargs)
+        # Opaque annotation object — fake_assign_word_speakers ignores it
+        # and applies hardcoded SPEAKER_00/SPEAKER_01 ranges instead.
+        return {"_fake_annotation": True}
+
+
+# Hardcoded speaker time ranges matching FakeModel segment boundaries.
+_FAKE_SPEAKER_RANGES = [
+    ("SPEAKER_00", 0.0, 2.5),
+    ("SPEAKER_01", 2.5, 5.0),
+]
+
+
+def fake_assign_word_speakers(diarize_segs, result):
+    """Inject 'speaker' keys based on segment midpoint vs. fake time ranges.
+
+    Ignores diarize_segs (opaque annotation) and applies the hardcoded
+    _FAKE_SPEAKER_RANGES directly. This causes _assign_majority_speaker
+    step-1 (segment-level "speaker" key) to fire, giving deterministic results.
+    """
+    for seg in result.get("segments", []):
+        mid = (seg["start"] + seg["end"]) / 2
+        for speaker, start, end in _FAKE_SPEAKER_RANGES:
+            if start <= mid < end:
+                seg["speaker"] = speaker
+                break
+    return result
+
+
+@pytest.fixture()
+def fake_whisperx(monkeypatch):
+    """Patch sys.modules with fake whisperx + whisperx.diarize; clear module cache."""
+    import sys
+    import types
+
+    FakeDiarizationPipeline._calls.clear()
+
+    wx = types.SimpleNamespace(
+        load_audio=lambda path: b"",
+        load_model=lambda *a, **kw: FakeModel(),
+        load_align_model=lambda **kw: (FakeAlignModel(), {}),
+        align=lambda segs, model, meta, audio, device: {"segments": segs, "language": "en"},
+        assign_word_speakers=fake_assign_word_speakers,
+    )
+    wx_diarize = types.SimpleNamespace(
+        DiarizationPipeline=FakeDiarizationPipeline,
+        assign_word_speakers=fake_assign_word_speakers,
+    )
+    monkeypatch.setitem(sys.modules, "whisperx", wx)
+    monkeypatch.setitem(sys.modules, "whisperx.diarize", wx_diarize)
+    # Clear the module-level cache so _get_whisperx() picks up the fake on next call.
+    monkeypatch.setattr("electric_blue.backends.diarize._whisperx", None)
+    return wx
+
+
+# --- S6 pipeline tests ---
+
+
+def test_backend_name():
+    """S6: WhisperXBackend.name == 'diarize'."""
+    from electric_blue.backends.diarize import WhisperXBackend
+
+    assert WhisperXBackend.name == "diarize"
+
+
+def test_backend_supports_diarization():
+    """S6: WhisperXBackend.capabilities.supports_diarization is True."""
+    from electric_blue.backends.diarize import WhisperXBackend
+
+    assert WhisperXBackend.capabilities.supports_diarization is True
+
+
+def test_missing_hf_token_raises(monkeypatch):
+    """S6: ConfigurationError raised when hf_token is empty; message references pyannote ToS URL."""
+    monkeypatch.setenv("HF_TOKEN", "")
+    monkeypatch.delenv("WHISPER_DIARIZE_NUM_SPEAKERS", raising=False)
+    cfg = Config.from_env()
+
+    from electric_blue.backends.diarize import WhisperXBackend
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        WhisperXBackend(cfg)
+    assert "huggingface.co/pyannote/speaker-diarization-3.1" in str(exc_info.value)
+
+
+def test_speaker_assignment_basic(monkeypatch, tmp_path, fake_whisperx):
+    """S6: transcribe() assigns SPEAKER_00 and SPEAKER_01 per fake annotation time ranges."""
+    monkeypatch.setenv("HF_TOKEN", "hf-test-token")
+    monkeypatch.delenv("WHISPER_DIARIZE_NUM_SPEAKERS", raising=False)
+    cfg = Config.from_env()
+
+    from electric_blue.backends.diarize import WhisperXBackend
+
+    monkeypatch.setattr("electric_blue.backends.diarize.extract", lambda *a, **kw: None)
+
+    src = tmp_path / "audio.mp4"
+    src.touch()
+    result = WhisperXBackend(cfg).transcribe(cfg, src)
+
+    assert result.segments[0].speaker == "SPEAKER_00"
+    assert result.segments[1].speaker == "SPEAKER_01"
+
+
+def test_majority_speaker_wins():
+    """S6: _assign_majority_speaker returns SPEAKER_00 when it holds 2.5 s vs SPEAKER_01's 1.0 s."""
+    from electric_blue.backends.diarize import _assign_majority_speaker
+
+    seg = {
+        "start": 0.0,
+        "end": 3.5,
+        "text": "test",
+        "words": [
+            {"start": 0.0, "end": 2.5, "speaker": "SPEAKER_00"},
+            {"start": 2.5, "end": 3.5, "speaker": "SPEAKER_01"},
+        ],
+    }
+    assert _assign_majority_speaker(seg) == "SPEAKER_00"
+
+
+def test_tie_break_alphabetical():
+    """S6: _assign_majority_speaker returns alphabetically first label on equal durations."""
+    from electric_blue.backends.diarize import _assign_majority_speaker
+
+    seg = {
+        "start": 0.0,
+        "end": 2.0,
+        "text": "test",
+        "words": [
+            {"start": 0.0, "end": 1.0, "speaker": "SPEAKER_01"},
+            {"start": 1.0, "end": 2.0, "speaker": "SPEAKER_00"},
+        ],
+    }
+    assert _assign_majority_speaker(seg) == "SPEAKER_00"
+
+
+def test_transcript_info_backend_format(monkeypatch, tmp_path, fake_whisperx):
+    """S6: info.backend == f'diarize:{cfg.model_size}'."""
+    monkeypatch.setenv("HF_TOKEN", "hf-test-token")
+    monkeypatch.setenv("WHISPER_MODEL", "tiny")
+    monkeypatch.delenv("WHISPER_DIARIZE_NUM_SPEAKERS", raising=False)
+    cfg = Config.from_env()
+
+    from electric_blue.backends.diarize import WhisperXBackend
+
+    monkeypatch.setattr("electric_blue.backends.diarize.extract", lambda *a, **kw: None)
+
+    src = tmp_path / "audio.mp4"
+    src.touch()
+    result = WhisperXBackend(cfg).transcribe(cfg, src)
+
+    assert result.info.backend == f"diarize:{cfg.model_size}"
+
+
+def test_num_speakers_passed_to_pipeline(monkeypatch, tmp_path, fake_whisperx):
+    """S6: cfg.diarize_num_speakers=2 → FakeDiarizationPipeline.__call__ receives num_speakers=2."""
+    monkeypatch.setenv("HF_TOKEN", "hf-test-token")
+    monkeypatch.setenv("WHISPER_DIARIZE_NUM_SPEAKERS", "2")
+    cfg = Config.from_env()
+
+    from electric_blue.backends.diarize import WhisperXBackend
+
+    monkeypatch.setattr("electric_blue.backends.diarize.extract", lambda *a, **kw: None)
+
+    src = tmp_path / "audio.mp4"
+    src.touch()
+    WhisperXBackend(cfg).transcribe(cfg, src)
+
+    assert FakeDiarizationPipeline._calls, "DiarizationPipeline.__call__ was never invoked"
+    assert FakeDiarizationPipeline._calls[0].get("num_speakers") == 2
+
+
+def test_num_speakers_absent_in_auto_mode(monkeypatch, tmp_path, fake_whisperx):
+    """S6: cfg.diarize_num_speakers=None → FakeDiarizationPipeline.__call__ receives no num_speakers kwarg."""
+    monkeypatch.setenv("HF_TOKEN", "hf-test-token")
+    monkeypatch.delenv("WHISPER_DIARIZE_NUM_SPEAKERS", raising=False)
+    cfg = Config.from_env()
+
+    from electric_blue.backends.diarize import WhisperXBackend
+
+    monkeypatch.setattr("electric_blue.backends.diarize.extract", lambda *a, **kw: None)
+
+    src = tmp_path / "audio.mp4"
+    src.touch()
+    WhisperXBackend(cfg).transcribe(cfg, src)
+
+    assert FakeDiarizationPipeline._calls, "DiarizationPipeline.__call__ was never invoked"
+    assert "num_speakers" not in FakeDiarizationPipeline._calls[0]
+
+
+def test_no_whisperx_import_before_hf_guard(monkeypatch):
+    """S6: ConfigurationError fires in __init__ before whisperx is imported (INV-8).
+
+    Removes whisperx from sys.modules, constructs with empty HF_TOKEN, then confirms
+    whisperx is still absent — proving _get_whisperx() was never reached.
+    Does NOT use fake_whisperx (that fixture would pre-populate sys.modules).
+    """
+    import sys
+
+    monkeypatch.delitem(sys.modules, "whisperx", raising=False)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("WHISPER_DIARIZE_NUM_SPEAKERS", raising=False)
+    cfg = Config.from_env()
+
+    from electric_blue.backends.diarize import WhisperXBackend
+
+    with pytest.raises(ConfigurationError):
+        WhisperXBackend(cfg)
+
+    assert "whisperx" not in sys.modules

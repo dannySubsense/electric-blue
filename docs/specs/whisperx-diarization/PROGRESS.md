@@ -11,16 +11,16 @@ QC gate: **Frank** (judgment gate per forge invocation; loop until SHIP). YAGNI 
 - [x] S3: `Segment.speaker` in models.py — COMPLETE (Frank SHIP)
 - [x] S4: Diarize fields in config.py — COMPLETE (Frank SHIP)
 - [x] S5: Speaker prefix rendering in outputs.py — COMPLETE (Frank SHIP)
-- [ ] S6: `backends/diarize.py` (WhisperXBackend) — PENDING
+- [x] S6: `backends/diarize.py` (WhisperXBackend) — COMPLETE (Frank SHIP)
 - [ ] S7: Registry entry + watcher startup validation — PENDING
 - [ ] S8: pyproject extra + marker + Makefile gate filter — PENDING
 - [ ] S9: Diarize smoke test — PENDING
 - [ ] S10: README documentation — PENDING
 
 ## Current
-Slice: S6
+Slice: S7
 Step: starting
-Baseline: `make gate` green — 182 passed after S5
+Baseline: `make gate` green — 192 passed after S6
 
 ## Fix Attempts
 | Test/File | Attempts | Last Error |
@@ -31,3 +31,7 @@ Baseline: `make gate` green — 182 passed after S5
 - Frank is the QC gate (replaces @qc-agent in the standard forge cycle). Frank makes
   decisions/judgment calls; any issue/halt/note goes back to the forge team; loop until SHIP.
 - Char-test-first: S2 must be green against unmodified models.py/outputs.py before S3/S5.
+- S9 SMOKE TODO (Frank S6 flag): verify the REAL whisperX 3.8.6 export location of
+  `assign_word_speakers` — impl calls top-level `wx.assign_word_speakers` (matches arch
+  line 248) but arch patch-table lists `whisperx.diarize.assign_word_speakers`. Smoke must
+  catch a mismatch against the live library.
