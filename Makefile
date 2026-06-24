@@ -3,7 +3,7 @@
 gate:
 	black --check .
 	ruff check .
-	pytest -m "not smoke"
+	pytest -m "not smoke and not diarize_smoke"
 
 fmt:
 	black .

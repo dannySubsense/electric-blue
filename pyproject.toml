@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 local = ["faster-whisper>=1.2.0,<2.0"]  # bounded: aligns with whisperx floor; guards a 2.x break (INV-13)
+diarize = ["whisperx>=3.8.6,<4.0"]
 dev = [
     "pytest>=8",
     "black>=24",
@@ -44,4 +45,7 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["smoke: end-to-end tests requiring ffmpeg and faster-whisper"]
+markers = [
+    "smoke: end-to-end tests requiring ffmpeg and faster-whisper",
+    "diarize_smoke: end-to-end tests requiring HF_TOKEN env var and [diarize] installed",
+]
