@@ -1,9 +1,23 @@
 # Progress: pypi-publish (DDR-06)
 
-## Status: COMPLETE (CODE-MERGED pending PR #23 squash-merge; NOT LIVE)
+## Status: COMPLETE — CODE-MERGED @ `a497c0c` (PR #22 spec, #23 build, #24 corrective); NOT LIVE
 
-Branch: `sprint/pypi-publish` (off `main` @ bdbcdfa). Spec set merged via PR #22.
-Build PR: #23. Frank SPEC gate: SHIP. Frank BUILD gate: SHIP (after one HALT — see Fix Attempts).
+Spec set merged via PR #22 (`bdbcdfa`). Build merged via PR #23 (`c184c7a`). Corrective fix +
+live runbook merged via PR #24 (`a497c0c`). Frank SPEC gate: SHIP. Frank BUILD gate: SHIP (after
+one HALT — see Fix Attempts). Frank runbook review: SHIP (after one FIX — see Corrective fix).
+
+**To go LIVE, follow `RUNBOOK-LIVE.md`** (this dir) — HOP-1/2/3 (Trusted Publishers + GitHub
+Environments, mandatory `pypi` reviewer) → `workflow_dispatch` rehearsal → tag `v0.1.0` + approve
+reviewer gate → verify. Merging published nothing; release.yml is tag/dispatch-only.
+
+## Corrective fix (PR #24) — post-build defect found in Frank's runbook review
+The merged `release.yml` would wedge the rehearse→release flow: a `workflow_dispatch` rehearsal
+uploads `0.1.0` to TestPyPI; the real tag run re-runs `publish-testpypi` with identical filenames
+and 400s — and Warehouse permanently reserves a filename once uploaded (deletion does NOT free it),
+so `publish-pypi` (needs publish-testpypi) never reaches the reviewer gate. **Fix:** `skip-existing:
+true` on the TestPyPI publish step only (real PyPI stays strict). R-1 residual is now RESOLVED — no
+manual TestPyPI delete; the flow is idempotent. Also added `RUNBOOK-LIVE.md`; corrected 02-ARCHITECTURE
+§publish-testpypi + §TestPyPI-conflict to the skip-existing model.
 
 ## Slices
 - [x] S-1: pyproject.toml metadata finalization — COMPLETE
