@@ -24,6 +24,12 @@ P7 SECRET-SCAN / push-prep ──[Frank BUILD gate]──► P9 PR ─► merge
 There are **two distinct Frank gates** — spec (P2) and build (P8) — with different criteria. Do not
 conflate them.
 
+**Branch-first — applies to every tier below.** The branch is the *first* move, not the last:
+`git switch -c <branch>` runs **before the first edit**, so code is born on the branch and the PR is
+just "here is the diff," never something retrofitted at the end. Because a code change requires a PR
+anyway (**INV-6**: never push to `main` directly), there is no "do you want a PR?" to ask — branch
+first and open it. The only decision worth surfacing is the **merge**.
+
 ---
 
 ## P0 — DDR ACCEPTED *(upstream precondition)*
@@ -148,6 +154,34 @@ branch ─► PR ─► orchestrator self-merge
 
 This codifies the judgment call from 2026-06-16: the PR loop is discipline worth keeping; *waiting on
 review for a settled docs change* is the ceremony to drop.
+
+---
+
+## Fast-path — small self-evident code change
+Not every code change is a sprint. A **small, self-evident** change — a defaults tweak, a one-line
+fix, an obvious correction whose rationale fits entirely in the PR body — needs no DDR, no GitHub
+issue, no slices, no Frank gate. It keeps branch-first, the PR audit record, and CI:
+
+```
+branch ─► PR ─► CI green ─► self-review the diff ─► self-merge
+```
+
+- **No GitHub issue.** Issue-first is for work whose *intent outlives the diff* — a feature, a tracked
+  bug, anything with acceptance criteria or discussion you will want to find in six months. The test:
+  *is there intent worth recording before the diff exists?* If the change is its own explanation, the
+  PR is the record and an issue is just a second place saying the same thing. (PR #26 — CPU defaults
+  tuned after the first real run — was correctly issue-less.)
+- Still required: **P5** `lint-test` CI green, **P7** secret-scan over the diff, branch-first, and the
+  PR itself (**INV-6**).
+- **Self-review** = read your own diff as a reviewer, not the author who just wrote it. The
+  orchestrator may self-merge once CI is green; the **merge** is the one point a human may choose to
+  hold (or pre-authorize for small green changes).
+- **Escalate to the full loop** if scope grows, an invariant/contract is touched, a spec decision is
+  needed, or the rationale won't fit in the PR body. When unsure, escalate.
+
+The code sibling of the docs-only fast-path: same discipline (branch + PR + audit), sized to the
+change. Codifies the 2026-06-25 calls — branch-first (stop retrofitting PRs / asking "want a PR?")
+and the issue tier (Issue→branch→PR only when intent outlives the diff).
 
 ---
 
