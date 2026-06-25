@@ -87,7 +87,7 @@ class Config:
 
     @classmethod
     def from_env(cls) -> Config:
-        base_dir = Path(os.environ.get("TRANSCRIBE_BASE", Path.home() / "transcribe"))
+        base_dir = Path(os.environ.get("TRANSCRIBE_BASE", Path.cwd() / "data"))
         input_dir = Path(os.environ.get("TRANSCRIBE_INPUT", base_dir / "inbox"))
         output_dir = Path(os.environ.get("TRANSCRIBE_OUTPUT", base_dir / "transcripts"))
         done_dir = Path(os.environ.get("TRANSCRIBE_DONE", base_dir / "done"))
@@ -103,7 +103,7 @@ class Config:
             failed_dir=failed_dir,
             backend=os.environ.get("WHISPER_BACKEND", "local").lower(),
             language=language_raw,
-            model_size=os.environ.get("WHISPER_MODEL", "distil-large-v3"),
+            model_size=os.environ.get("WHISPER_MODEL", "base"),
             device=os.environ.get("WHISPER_DEVICE", "auto"),
             compute_type=os.environ.get("WHISPER_COMPUTE", "auto"),
             api_base_url=os.environ.get("WHISPER_API_BASE", "https://api.groq.com/openai/v1"),
