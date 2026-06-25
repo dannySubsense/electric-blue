@@ -17,12 +17,12 @@ def test_defaults(monkeypatch, tmp_path):
     for key in list(os.environ):
         if key.startswith(("TRANSCRIBE_", "WHISPER_", "NOTIFY_", "FFMPEG_")):
             monkeypatch.delenv(key, raising=False)
-    # Override HOME so base_dir resolves predictably
-    monkeypatch.setenv("HOME", str(tmp_path))
+    # chdir so the cwd-relative base_dir default resolves predictably
+    monkeypatch.chdir(tmp_path)
 
     cfg = Config.from_env()
 
-    expected_base = tmp_path / "transcribe"
+    expected_base = tmp_path / "data"
     assert cfg.base_dir == expected_base
     assert cfg.input_dir == expected_base / "inbox"
     assert cfg.output_dir == expected_base / "transcripts"
@@ -30,7 +30,7 @@ def test_defaults(monkeypatch, tmp_path):
     assert cfg.failed_dir == expected_base / "failed"
     assert cfg.backend == "local"
     assert cfg.language is None
-    assert cfg.model_size == "distil-large-v3"
+    assert cfg.model_size == "base"
     assert cfg.device == "auto"
     assert cfg.compute_type == "auto"
     assert cfg.api_base_url == "https://api.groq.com/openai/v1"
@@ -159,16 +159,16 @@ def test_notify_new_fields_frozen(monkeypatch):
 def test_batch_defaults(monkeypatch, tmp_path):
     """CFG-1: no batch env vars → all 8 batch fields take their documented defaults.
 
-    base_dir is derived the same way config.py does: Path.home() / "transcribe" when
-    TRANSCRIBE_BASE is unset.  Setting HOME=tmp_path makes that predictable.
+    base_dir is derived the same way config.py does: Path.cwd() / "data" when
+    TRANSCRIBE_BASE is unset.  chdir to tmp_path makes that predictable.
     """
     for key in list(os.environ):
         if key.startswith(("TRANSCRIBE_", "WHISPER_", "NOTIFY_", "FFMPEG_", "GROQ_BATCH_")):
             monkeypatch.delenv(key, raising=False)
-    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.chdir(tmp_path)
 
     cfg = Config.from_env()
-    base = tmp_path / "transcribe"
+    base = tmp_path / "data"
 
     assert cfg.batch_inbox_dir is None
     assert cfg.batch_submitted_dir == base / "batch_submitted"
