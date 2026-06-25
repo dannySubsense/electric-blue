@@ -1,5 +1,12 @@
 # RUNBOOK — Going LIVE on PyPI (DDR-06, electric-blue 0.1.0)
 
+> 🛑 **LIVE TRACK KILLED 2026-06-25 (Danny's call). DO NOT run this runbook.** PyPI publication was
+> agent-invented ceremony — `electric-blue` is a homelab leaf utility with no public audience, so a
+> public `pip install` handle buys nothing (self-hosting installs from a git checkout). The merged
+> DDR-06 code is harmless and stays (release.yml is tag/dispatch-only — merging published nothing).
+> Revive **only** if Danny explicitly wants a genuinely public package. See LORE `31060675` and
+> `project_status`. Everything below is retained for that hypothetical, not as a current instruction.
+
 **Audience:** Danny (repo owner). **Status of code:** CODE-MERGED @ `main` `c184c7a`, NOT LIVE.
 **What "live" means:** `pip install electric-blue` resolves from real PyPI.
 

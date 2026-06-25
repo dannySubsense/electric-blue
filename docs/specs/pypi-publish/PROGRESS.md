@@ -1,12 +1,17 @@
 # Progress: pypi-publish (DDR-06)
 
-## Status: COMPLETE — CODE-MERGED @ `a497c0c` (PR #22 spec, #23 build, #24 corrective); NOT LIVE
+## Status: CODE-MERGED @ `a497c0c` (PR #22 spec, #23 build, #24 corrective); **LIVE TRACK KILLED 2026-06-25** — will NOT ship
+
+> 🛑 **The LIVE/publish track was killed by Danny on 2026-06-25** as agent-invented ceremony (homelab
+> leaf utility, no public audience). Do NOT run `RUNBOOK-LIVE.md`. The code stays CODE-MERGED and
+> harmless; revive only on explicit request. See the RUNBOOK banner + LORE `31060675`. The rest of
+> this file is the historical build record, retained as-is.
 
 Spec set merged via PR #22 (`bdbcdfa`). Build merged via PR #23 (`c184c7a`). Corrective fix +
 live runbook merged via PR #24 (`a497c0c`). Frank SPEC gate: SHIP. Frank BUILD gate: SHIP (after
 one HALT — see Fix Attempts). Frank runbook review: SHIP (after one FIX — see Corrective fix).
 
-**To go LIVE, follow `RUNBOOK-LIVE.md`** (this dir) — HOP-1/2/3 (Trusted Publishers + GitHub
+**(HISTORICAL — LIVE TRACK KILLED, see banner above.)** To go LIVE, follow `RUNBOOK-LIVE.md` (this dir) — HOP-1/2/3 (Trusted Publishers + GitHub
 Environments, mandatory `pypi` reviewer) → `workflow_dispatch` rehearsal → tag `v0.1.0` + approve
 reviewer gate → verify. Merging published nothing; release.yml is tag/dispatch-only.
 
