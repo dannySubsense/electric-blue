@@ -299,6 +299,7 @@ publish-testpypi:
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://upload.test.pypi.org/legacy/
+        skip-existing: true
 
     - name: Verify TestPyPI install
       run: |
@@ -320,8 +321,14 @@ dependencies from real PyPI while pulling `electric-blue` itself from TestPyPI. 
 standard pattern for TestPyPI install verification. The AC intent (electric-blue resolves and
 installs from TestPyPI) is fully satisfied.
 
-**TestPyPI version conflicts:** if a prior run already uploaded `0.1.0` to TestPyPI,
-`pypa/gh-action-pypi-publish` will fail with a 400/conflict error. `publish-pypi` will not run.
+**TestPyPI re-uploads (idempotent via `skip-existing`):** the step sets `skip-existing: true`.
+This is load-bearing for the dual-trigger design: a `workflow_dispatch` rehearsal uploads
+`0.1.0` to TestPyPI, and the later real tag run re-runs `publish-testpypi` with byte-identical
+filenames. Warehouse (PyPI/TestPyPI) permanently reserves a filename once uploaded — deleting the
+release does NOT free it — so without `skip-existing` the real run would 400 and block
+`publish-pypi`. With `skip-existing: true`, the already-present file is skipped (not an error),
+the job succeeds, and the release proceeds to the `pypi` gate. The real-PyPI step does NOT set
+`skip-existing` (a genuine collision there must fail loud).
 
 #### Job: `publish-pypi`
 
@@ -537,17 +544,20 @@ test build (`python -m build`) to verify rendering.
 | `pytest -m smoke` fails on wheel | `smoke-wheel` job | Debug locally; no upload occurred; re-push tag after fix |
 | OIDC misconfiguration — wrong env name, wrong workflow name | `publish-testpypi` job | Fix publisher config in PyPI/TestPyPI web UI or fix environment name; no real-PyPI upload occurred |
 
-### TestPyPI Version Conflict
+### TestPyPI re-upload after a rehearsal — handled automatically
 
-If `0.1.0` was already uploaded to TestPyPI (from a prior run), `publish-testpypi` fails with a
-400 conflict. `publish-pypi` does not run.
+If `0.1.0` was already uploaded to TestPyPI (the expected case: a `workflow_dispatch` rehearsal
+preceded the real tag run), `publish-testpypi` does NOT fail. The step sets `skip-existing: true`,
+so the already-present file is skipped and the job succeeds; the release proceeds to `publish-pypi`.
 
-Recovery: manually delete the conflicting release on TestPyPI (TestPyPI allows deletion; PyPI
-does not), then re-trigger via `workflow_dispatch` (the TestPyPI-only rehearsal path) or
-re-push the same `vX.Y.Z` tag after deletion.
+No manual deletion is required (and deletion would not help anyway — Warehouse permanently
+reserves a filename once uploaded, even after the release is deleted; `skip-existing` is the
+correct mechanism). The dual-trigger rehearse-then-release flow works without operator intervention
+on the TestPyPI step.
 
 > **Note:** a `dev`-suffix tag (e.g., `v0.1.0.dev1`) does NOT match the trigger regex
-> `v[0-9]+.[0-9]+.[0-9]+` and will never start `release.yml`. Do not use that approach.
+> `v[0-9]+.[0-9]+.[0-9]+` and will never start `release.yml` — do not attempt that as a workaround;
+> it is unnecessary now that the TestPyPI step is idempotent.
 
 ### Post-PyPI-Publish (immutable — yank only)
 
